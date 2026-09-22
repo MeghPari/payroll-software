@@ -4,6 +4,7 @@ import { ChevronDown, LogOut, Settings, User } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -22,12 +23,14 @@ export function UserMenu() {
         <ChevronDown className="hidden h-3.5 w-3.5 text-muted-foreground sm:inline" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel>
-          <div className="flex flex-col gap-0.5">
-            <span className="text-sm font-medium text-foreground">Admin User</span>
-            <span className="text-xs font-normal text-muted-foreground">admin@acme.com</span>
-          </div>
-        </DropdownMenuLabel>
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-sm font-medium text-foreground">Admin User</span>
+              <span className="text-xs font-normal text-muted-foreground">admin@acme.com</span>
+            </div>
+          </DropdownMenuLabel>
+        </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem>
           <User className="h-4 w-4" /> My Profile
