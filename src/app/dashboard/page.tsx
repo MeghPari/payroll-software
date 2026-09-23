@@ -16,6 +16,10 @@ import {
   FileText,
   ReceiptText,
   FileCheck,
+  UserCheck,
+  UserX,
+  Clock3,
+  ShieldAlert,
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
@@ -25,12 +29,23 @@ import { CardGridSkeleton } from "@/components/shared/loading-skeleton";
 import { PayrollBarChart } from "@/components/shared/charts/payroll-bar-chart";
 import { CashFlowLineChart } from "@/components/shared/charts/cash-flow-line-chart";
 import { DonutChart, DonutLegend } from "@/components/shared/charts/donut-chart";
+import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getDashboardOverview } from "@/services/dashboard.service";
+import { getTodayAttendanceSummary, type TodayAttendanceCounts } from "@/services/attendance.service";
+import { getPayrollExceptionCounts, getPayrollEligibilityCounts } from "@/services/payroll.service";
+import { CURRENT_PAYROLL_MONTH_KEY } from "@/data/mock/attendance";
 import { formatINR } from "@/utils/format";
 import Link from "next/link";
 
 type Overview = Awaited<ReturnType<typeof getDashboardOverview>>;
+
+interface OpsSnapshot {
+  today: TodayAttendanceCounts;
+  exceptionCount: number;
+  eligible: number;
+  total: number;
+}
 
 const expenseColors = ["#1769E0", "#22A06B", "#D99823", "#7C5CFC", "#DC4C64", "#94A3B8"];
 
@@ -44,13 +59,28 @@ const pendingActionIcons: Record<string, typeof CalendarClock> = {
 
 export default function DashboardPage() {
   const [data, setData] = useState<Overview | null>(null);
+  const [ops, setOps] = useState<OpsSnapshot | null>(null);
 
   useEffect(() => {
     getDashboardOverview().then(setData);
+    Promise.all([
+      getTodayAttendanceSummary(),
+      getPayrollExceptionCounts(CURRENT_PAYROLL_MONTH_KEY),
+      getPayrollEligibilityCounts(CURRENT_PAYROLL_MONTH_KEY),
+    ]).then(([today, exceptions, eligibility]) => {
+      const total = Object.values(eligibility).reduce((s, c) => s + c, 0);
+      setOps({
+        today,
+        exceptionCount: Object.values(exceptions).reduce((s, c) => s + c, 0),
+        eligible: eligibility.Eligible ?? 0,
+        total,
+      });
+    });
   }, []);
 
   const { kpis, payrollSummary, accountsSummary, pendingActions, payrollCostHistory, cashFlowHistory, topExpenses } =
     data ?? ({} as Partial<Overview>);
+  const readinessPercent = ops && ops.total ? Math.round((ops.eligible / ops.total) * 100) : 0;
 
   return (
     <div>
@@ -105,6 +135,65 @@ export default function DashboardPage() {
           <StatCard icon={Landmark} tone="blue" label="Bank Balance" value={formatINR(kpis!.bankBalance)} />
         </div>
       )}
+
+      <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <SectionCard title="Today's Workforce" subtitle="Live attendance snapshot" className="lg:col-span-1">
+          {!ops ? (
+            <SummarySkeleton rows={4} />
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <MiniMetric icon={UserCheck} tone="text-success" label="Present" value={ops.today.present} />
+              <MiniMetric icon={UserX} tone="text-danger" label="Absent" value={ops.today.absent} />
+              <MiniMetric icon={CalendarCheck2} tone="text-purple" label="On Leave" value={ops.today.onLeave} />
+              <MiniMetric icon={Clock3} tone="text-warning" label="Late" value={ops.today.late} />
+              <Link href="/attendance" className="col-span-2 inline-block pt-1 text-xs font-medium text-primary hover:underline">
+                View Today&apos;s Attendance →
+              </Link>
+            </div>
+          )}
+        </SectionCard>
+
+        <SectionCard title="Payroll Exceptions" subtitle={kpis?.payrollPeriod} className="lg:col-span-1">
+          {!ops ? (
+            <SummarySkeleton rows={3} />
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 rounded-lg bg-rose-50 px-3 py-3 ring-1 ring-inset ring-rose-200">
+                <ShieldAlert className="h-5 w-5 shrink-0 text-danger" />
+                <div>
+                  <p className="text-lg font-semibold text-danger">{ops.exceptionCount}</p>
+                  <p className="text-xs text-foreground/70">Issues need attention before payroll can be finalized</p>
+                </div>
+              </div>
+              <Link href="/payroll" className="inline-block text-xs font-medium text-primary hover:underline">
+                Open Payroll Exception Center →
+              </Link>
+            </div>
+          )}
+        </SectionCard>
+
+        <SectionCard title="Payroll Readiness" subtitle={kpis?.payrollPeriod} className="lg:col-span-1">
+          {!ops ? (
+            <SummarySkeleton rows={3} />
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-baseline justify-between">
+                <span className="text-sm text-muted-foreground">Payroll Ready</span>
+                <span className="text-sm font-semibold text-foreground">
+                  {ops.eligible} / {ops.total} Employees
+                </span>
+              </div>
+              <Progress value={readinessPercent} className="h-2" />
+              <p className="text-xs text-muted-foreground">
+                {readinessPercent}% ready · {ops.total - ops.eligible} employee(s) require attention
+              </p>
+              <Link href="/payroll" className="inline-block text-xs font-medium text-primary hover:underline">
+                Go to Payroll Run →
+              </Link>
+            </div>
+          )}
+        </SectionCard>
+      </div>
 
       <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
         <SectionCard title="Payroll Summary" subtitle={kpis?.payrollPeriod} className="lg:col-span-1">
@@ -205,6 +294,16 @@ export default function DashboardPage() {
           )}
         </ChartCard>
       </div>
+    </div>
+  );
+}
+
+function MiniMetric({ icon: Icon, tone, label, value }: { icon: typeof UserCheck; tone: string; label: string; value: number }) {
+  return (
+    <div className="rounded-lg border border-border bg-muted/20 px-3 py-2.5">
+      <Icon className={`h-4 w-4 ${tone}`} />
+      <p className="mt-1.5 text-lg font-semibold text-foreground">{value}</p>
+      <p className="text-[11px] text-muted-foreground">{label}</p>
     </div>
   );
 }

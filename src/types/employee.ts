@@ -7,7 +7,9 @@ export type Department =
   | "Operations"
   | "IT";
 
-export type EmployeeStatus = "Active" | "On Leave" | "Notice Period" | "Inactive";
+export type EmployeeStatus = "Active" | "Probation" | "On Notice" | "On Leave" | "Salary Hold" | "Inactive" | "Exited";
+
+export type EmploymentCategory = "Permanent" | "Contract" | "Consultant" | "Intern" | "Temporary" | "Rent Candidate" | "Other";
 
 export type Gender = "Male" | "Female" | "Other";
 
@@ -67,6 +69,8 @@ export interface Employee {
   ctc: number;
   reportingManager?: string;
   employmentType: "Full-time" | "Part-time" | "Contractor" | "Intern";
+  /** Worker category — drives statutory (PF/ESI) applicability defaults. See "Rent Candidate" handling in operations-store. */
+  category?: EmploymentCategory;
 }
 
 export interface EmployeeFilters {
@@ -74,5 +78,7 @@ export interface EmployeeFilters {
   department?: Department | "All";
   designation?: string | "All";
   location?: string | "All";
+  state?: string | "All";
   status?: EmployeeStatus | "All";
+  category?: EmploymentCategory | "All";
 }

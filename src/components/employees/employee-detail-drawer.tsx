@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -33,6 +34,7 @@ function fmtDate(iso: string) {
 }
 
 export function EmployeeDetailDrawer({ employee, open, onOpenChange }: EmployeeDetailDrawerProps) {
+  const router = useRouter();
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-md overflow-y-auto p-0">
@@ -124,7 +126,7 @@ export function EmployeeDetailDrawer({ employee, open, onOpenChange }: EmployeeD
               <Button variant="outline" className="flex-1 gap-1.5">
                 <Pencil className="h-4 w-4" /> Edit
               </Button>
-              <Button className="flex-1 gap-1.5">
+              <Button className="flex-1 gap-1.5" onClick={() => { onOpenChange(false); router.push(`/employees/${employee.id}`); }}>
                 <ExternalLink className="h-4 w-4" /> View Full Profile
               </Button>
             </div>

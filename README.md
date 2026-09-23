@@ -47,33 +47,43 @@ src/
   components/
     layout/               AppShell, AppSidebar, TopHeader
     shared/                Reusable UI: StatCard, DataTable, StatusBadge, ChartCard,
-                           AlertCard, PayrollStepper, AccountTree, charts/, etc.
-    employees/             Employee-specific pieces (detail drawer, add-employee form)
+                           AlertCard, PayrollStepper, AccountTree, BulkUploadDialog,
+                           SalaryCalculationDrawer, StateDistributionCard, charts/, etc.
+    employees/             Detail drawer, add-employee form, change-status/salary-hold
+                           dialogs, bulk-upload wrapper
+    attendance/             Mark/edit attendance dialog, bulk-upload wrapper
+    salary/                 Bulk salary upload wrapper
     ui/                    shadcn/ui primitives (button, dialog, table, ...)
   config/
     api.ts                 API base URL / timeout config for future backend wiring
     nav.ts                  Sidebar navigation structure
-  data/mock/               Realistic seed data (25+ employees, payroll, ledgers, ...)
+    permissions.ts           Centralized role → module permission map (section 25 prep)
+  data/mock/               Phase 1 seed data (accounting, invoices, reports, ...)
   services/                 Promise-based data-access functions (see below)
-  store/                   Zustand store for company/month selection, sidebar state
-  types/                    Shared TypeScript interfaces and unions
+  store/
+    app-store.ts             Company/month selection, sidebar state
+    operations-store.ts       Employee/KYC/salary/attendance/payroll engine — see below
+  types/                    Shared TypeScript interfaces and unions (operations.ts holds
+                           the payroll-engine types)
   utils/                    formatINR, pluralize, initials, etc.
-  lib/                      cn() className helper, mockDelay()
+  lib/                      cn() className helper, mockDelay(), csv.ts (template/parse)
 ```
 
 ## Routes
 
 | Route | Purpose |
 |---|---|
-| `/dashboard` | Company-wide KPI overview, payroll/accounts summary, charts |
-| `/employees` | Employee directory, filters, detail drawer, add-employee form |
-| `/salary-structures` | Manage earning/deduction components per structure |
-| `/attendance` | Attendance summary, leave requests/approvals, leave balance, upload history |
-| `/payroll` | Guided payroll run: stepper, validation alerts, review table, approve/lock |
+| `/dashboard` | KPI overview, Today's Workforce, Payroll Exceptions, Payroll Readiness, charts |
+| `/employees` | Directory, State/Location/Status filters, bulk upload, bulk actions, distribution-by-state |
+| `/employees/[id]` | Employee profile: Overview, Employment, Salary, Attendance, KYC & Statutory, Documents, Payroll History |
+| `/salary-structures` | Structure rules + per-employee actual salary, bulk salary upload, revision history |
+| `/attendance` | Today's Attendance, monthly Attendance Register (with finalize/lock), leave requests/balance, bulk upload, upload history |
+| `/payroll` | 11-step payroll run: attendance finalization → validation → review → approve → lock |
 | `/payslips` | Payslip list, status donut, bulk publish/download/reprocess actions |
 | `/disbursement` | Salary disbursement status per employee |
 | `/compliance` | Statutory filing checklist + payroll alerts |
 | `/payroll-reports` | Payroll-specific report library (PF, ESI, TDS, F&F, ...) |
+| `/audit-trail` | Searchable log of employee/salary/attendance/payroll changes |
 | `/accounting` | Accounting dashboard: revenue/expense KPIs, GST, cash flow |
 | `/chart-of-accounts` | Account group tree + ledger table |
 | `/journal-entries` | Journal/payment/receipt/contra vouchers |
@@ -84,7 +94,9 @@ src/
 | `/gst` | GST liability summary and return filing status |
 | `/financial-reports` | Trial Balance, P&L, Balance Sheet, etc. report launcher |
 | `/payroll-accounting` | Auto-generated payroll journal entries |
-| `/announcements`, `/user-roles`, `/settings`, `/support` | Company/admin utilities |
+| `/announcements`, `/support` | Company/admin utilities |
+| `/user-roles` | Role permission matrix + demo role switcher |
+| `/settings` | Company, Payroll Settings (salary proration), Statutory Configuration (PF/ESI/PT), Tax Configuration (TDS), Notifications, Billing |
 
 ## Mock data
 
@@ -153,6 +165,49 @@ real backend is a config change, not a refactor.
 > states) with the same column-definition ergonomics. Swap it for TanStack
 > Table (or anything else) without touching call sites — the `Column<T>` type
 > is the only contract pages depend on.
+
+## Payroll operations engine
+
+The attendance-to-payroll workflow (employee lifecycle, KYC, employee-specific
+salary, attendance, statutory configuration, payroll calculation/validation,
+audit trail) is powered by a single Zustand store, **not** the lightweight
+`data/mock/*` arrays used by the original Phase 1 pages:
+
+- `src/store/operations-store.ts` — canonical in-memory state for employees,
+  KYC records, salary profiles, salary revisions/holds, daily attendance,
+  payroll periods, audit log, and statutory configuration. Also exports pure
+  calculation helpers (`calculatePayrollRow`, `attendanceSummaryFor`,
+  `validateEmployeeForPayroll`, `checkDuplicateUAN`, `payrollExceptionsForMonth`, ...)
+  that services and components call directly.
+- `src/types/operations.ts` — the types for all of the above
+  (`EmployeeKYC`, `SalaryProfile`, `DailyAttendanceRecord`, `PayrollCalculation`,
+  `PayrollValidationIssue`, `StatutoryConfiguration`, `AuditRecord`, `Role`, ...).
+- `employee.service.ts` reads/writes through this store (not its own array),
+  so employee data stays consistent across every page — bulk-imported or
+  status-changed employees show up everywhere immediately.
+- New service files following the same Promise + `mockDelay` pattern as
+  Phase 1: `salary.service.ts`, `kyc.service.ts`, `statutory.service.ts`,
+  `audit.service.ts`, plus substantial additions to `attendance.service.ts`
+  and `payroll.service.ts` (daily attendance, finalization, bulk upload,
+  attendance-adjusted payroll calculation, validation engine, exceptions,
+  period lock/unlock).
+
+**Statutory calculation disclaimer:** PF/ESI/PT/TDS math in
+`operations-store.ts` is a frontend approximation for demo purposes, driven
+by editable values under Settings → Statutory/Tax Configuration. Every
+calculation path carries a comment to this effect — final statutory
+calculation must come from the backend based on applicable law, wage limits,
+employee category, state and tax rules.
+
+**Bulk upload** (Employees, Salary, Attendance) shares one generic component,
+`src/components/shared/bulk-upload-dialog.tsx`: Download Template → Upload →
+Validation Preview → Import Summary. CSV files are parsed for real
+(`src/lib/csv.ts`); `.xls`/`.xlsx` selection is accepted but simulated with
+sample data, since real spreadsheet parsing would require a client-side
+library (`xlsx`/SheetJS) that currently ships with an unpatched
+prototype-pollution/ReDoS advisory — not worth adding for a demo feature.
+Swap in a patched parser (or a backend upload endpoint) without touching the
+dialog's callers.
 
 ## Design system
 

@@ -3,6 +3,7 @@
 import { type ReactNode, useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Pagination } from "@/components/shared/pagination";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableRowsSkeleton } from "@/components/shared/loading-skeleton";
@@ -42,6 +43,10 @@ interface DataTableProps<T> {
   emptyTitle?: string;
   emptyDescription?: string;
   stickyHeader?: boolean;
+  /** Row-selection support (checkbox column). Provide all three to enable it. */
+  getRowId?: (row: T) => string;
+  selectedIds?: Set<string>;
+  onSelectionChange?: (ids: Set<string>) => void;
 }
 
 export function DataTable<T>({
@@ -53,7 +58,11 @@ export function DataTable<T>({
   emptyTitle = "No records found",
   emptyDescription = "Try adjusting your search or filters.",
   stickyHeader = true,
+  getRowId,
+  selectedIds,
+  onSelectionChange,
 }: DataTableProps<T>) {
+  const selectable = !!getRowId && !!selectedIds && !!onSelectionChange;
   const [sortId, setSortId] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [pageIndex, setPageIndex] = useState(0);
@@ -99,12 +108,36 @@ export function DataTable<T>({
     return <EmptyState title={emptyTitle} description={emptyDescription} />;
   }
 
+  const pageIds = selectable ? pageRows.map((r) => getRowId!(r)) : [];
+  const allPageSelected = selectable && pageIds.length > 0 && pageIds.every((id) => selectedIds!.has(id));
+
+  function toggleAll() {
+    if (!selectable) return;
+    const next = new Set(selectedIds);
+    if (allPageSelected) pageIds.forEach((id) => next.delete(id));
+    else pageIds.forEach((id) => next.add(id));
+    onSelectionChange!(next);
+  }
+
+  function toggleRow(id: string) {
+    if (!selectable) return;
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    onSelectionChange!(next);
+  }
+
   return (
     <div className="flex flex-col">
       <div className="overflow-x-auto">
         <Table>
           <TableHeader className={cn(stickyHeader && "sticky top-0 z-10 bg-muted/50")}>
             <TableRow className="hover:bg-transparent">
+              {selectable && (
+                <TableHead className="w-10">
+                  <Checkbox checked={allPageSelected} onCheckedChange={toggleAll} aria-label="Select all rows on this page" />
+                </TableHead>
+              )}
               {columns.map((col, index) => {
                 const colId = getColumnId(col, index);
                 const canSort = col.enableSorting !== false && (!!col.accessorKey || !!col.accessorFn);
@@ -130,8 +163,15 @@ export function DataTable<T>({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {pageRows.map((row, rowIndex) => (
+            {pageRows.map((row, rowIndex) => {
+              const rowId = selectable ? getRowId!(row) : undefined;
+              return (
               <TableRow key={rowIndex} className={cn(onRowClick && "cursor-pointer")} onClick={() => onRowClick?.(row)}>
+                {selectable && (
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <Checkbox checked={selectedIds!.has(rowId!)} onCheckedChange={() => toggleRow(rowId!)} aria-label="Select row" />
+                  </TableCell>
+                )}
                 {columns.map((col, index) => {
                   const colId = getColumnId(col, index);
                   const value = getRawValue(col, row);
@@ -142,7 +182,8 @@ export function DataTable<T>({
                   );
                 })}
               </TableRow>
-            ))}
+              );
+            })}
           </TableBody>
         </Table>
       </div>

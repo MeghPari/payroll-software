@@ -5,7 +5,7 @@ interface SectionCardProps {
   title?: string;
   subtitle?: string;
   actions?: ReactNode;
-  children: ReactNode;
+  children?: ReactNode;
   className?: string;
   noPadding?: boolean;
 }
@@ -14,7 +14,7 @@ export function SectionCard({ title, subtitle, actions, children, className, noP
   return (
     <div className={cn("rounded-xl border border-border bg-card shadow-sm", className)}>
       {(title || actions) && (
-        <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
+        <div className={cn("flex items-center justify-between gap-3 px-5 py-4", children && "border-b border-border")}>
           <div>
             {title && <h2 className="text-[15px] font-semibold text-foreground">{title}</h2>}
             {subtitle && <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>}
@@ -22,7 +22,7 @@ export function SectionCard({ title, subtitle, actions, children, className, noP
           {actions}
         </div>
       )}
-      <div className={cn(!noPadding && "p-5")}>{children}</div>
+      {children && <div className={cn(!noPadding && "p-5")}>{children}</div>}
     </div>
   );
 }

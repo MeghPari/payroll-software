@@ -4,3 +4,4 @@ export * from "./payroll";
 export * from "./payslip";
 export * from "./accounting";
 export * from "./reports";
+export * from "./operations";

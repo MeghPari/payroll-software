@@ -1,7 +1,25 @@
 import { payrollRun as mockPayrollRun, payrollCostHistory } from "@/data/mock/payroll";
 import { salaryStructures as mockStructures } from "@/data/mock/salaryStructures";
 import { mockDelay } from "@/lib/async";
-import type { PayrollRun, PayrollStepStatus, SalaryStructure } from "@/types";
+import {
+  calculatePayrollForMonth,
+  calculatePayrollRow,
+  payrollExceptionCountsForMonth,
+  payrollExceptionsForMonth,
+  useOperations,
+  validatePayrollForMonth,
+} from "@/store/operations-store";
+import type {
+  PayrollCalculation,
+  PayrollEligibility,
+  PayrollException,
+  PayrollExceptionType,
+  PayrollPeriod,
+  PayrollRun,
+  PayrollStepStatus,
+  PayrollValidationIssue,
+  SalaryStructure,
+} from "@/types";
 
 const runState: PayrollRun = { ...mockPayrollRun, steps: mockPayrollRun.steps.map((s) => ({ ...s })) };
 const structureStore: SalaryStructure[] = [...mockStructures];
@@ -64,4 +82,80 @@ export async function createSalaryStructure(data: Omit<SalaryStructure, "id" | "
   const newStructure: SalaryStructure = { ...data, id: `ss-${structureStore.length + 1}`, employeeCount: 0 };
   structureStore.push(newStructure);
   return mockDelay(newStructure);
+}
+
+// ---------------------------------------------------------------------------
+// Attendance-integrated payroll engine (Payroll Run, section 17–23)
+// ---------------------------------------------------------------------------
+
+// TODO: Replace mock implementation with REST/GraphQL API.
+export async function calculatePayrollPreview(employeeId: string, month: string): Promise<PayrollCalculation | undefined> {
+  return mockDelay(calculatePayrollRow(employeeId, month));
+}
+
+// TODO: Replace mock implementation with REST/GraphQL API.
+export async function getPayrollReview(month: string): Promise<PayrollCalculation[]> {
+  return mockDelay(calculatePayrollForMonth(month), 1000);
+}
+
+export interface PayrollValidationSummary {
+  issues: PayrollValidationIssue[];
+  totalChecked: number;
+  passed: number;
+  warnings: number;
+  blockingErrors: number;
+}
+
+// TODO: Replace mock implementation with REST/GraphQL API.
+export async function validatePayrollMonth(month: string): Promise<PayrollValidationSummary> {
+  const issues = validatePayrollForMonth(month);
+  const totalChecked = useOperations.getState().employees.length;
+  const warnings = issues.filter((i) => i.severity === "Warning").length;
+  const blockingErrors = issues.filter((i) => i.severity === "Blocking Error").length;
+  const passed = issues.filter((i) => i.severity === "Passed").length;
+  useOperations.getState().validatePeriod(month);
+  return mockDelay({ issues, totalChecked, passed, warnings, blockingErrors }, 1100);
+}
+
+// TODO: Replace mock implementation with REST/GraphQL API.
+export async function getPayrollExceptions(month: string): Promise<PayrollException[]> {
+  return mockDelay(payrollExceptionsForMonth(month));
+}
+
+// TODO: Replace mock implementation with REST/GraphQL API.
+export async function getPayrollExceptionCounts(month: string): Promise<Record<PayrollExceptionType, number>> {
+  return mockDelay(payrollExceptionCountsForMonth(month));
+}
+
+// TODO: Replace mock implementation with REST/GraphQL API.
+export async function getPayrollEligibilityCounts(month: string): Promise<Record<PayrollEligibility, number>> {
+  const rows = calculatePayrollForMonth(month);
+  const counts = {} as Record<PayrollEligibility, number>;
+  rows.forEach((r) => {
+    counts[r.eligibility] = (counts[r.eligibility] ?? 0) + 1;
+  });
+  return mockDelay(counts);
+}
+
+// TODO: Replace mock implementation with REST/GraphQL API.
+export async function getPayrollPeriod(month: string): Promise<PayrollPeriod> {
+  return mockDelay(useOperations.getState().ensurePeriod(month));
+}
+
+// TODO: Replace mock implementation with REST/GraphQL API.
+export async function approvePayrollPeriod(month: string): Promise<PayrollPeriod> {
+  useOperations.getState().approvePeriod(month);
+  return mockDelay(useOperations.getState().periods[month], 1400);
+}
+
+// TODO: Replace mock implementation with REST/GraphQL API.
+export async function lockPayrollPeriod(month: string): Promise<PayrollPeriod> {
+  useOperations.getState().lockPeriod(month);
+  return mockDelay(useOperations.getState().periods[month], 900);
+}
+
+// TODO: Replace mock implementation with REST/GraphQL API.
+export async function unlockPayrollPeriod(month: string): Promise<PayrollPeriod> {
+  useOperations.getState().unlockPeriod(month);
+  return mockDelay(useOperations.getState().periods[month], 500);
 }

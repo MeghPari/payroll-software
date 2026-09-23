@@ -25,6 +25,7 @@ import {
   Settings,
   LifeBuoy,
   BookText,
+  History,
 } from "lucide-react";
 
 export interface NavItem {
@@ -76,6 +77,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { label: "Announcements", href: "/announcements", icon: Megaphone },
       { label: "User Roles", href: "/user-roles", icon: UserCog },
+      { label: "Audit Trail", href: "/audit-trail", icon: History },
       { label: "Settings", href: "/settings", icon: Settings },
     ],
   },

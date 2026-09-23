@@ -4,7 +4,8 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import {
   Dialog,
   DialogContent,
@@ -17,9 +18,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { StatusBadge } from "@/components/shared/status-badge";
 import { departments } from "@/data/mock/employees";
-import { createEmployee } from "@/services/employee.service";
+import { createEmployee, checkDuplicateUAN } from "@/services/employee.service";
+import { indianStates, employmentCategories } from "@/store/operations-store";
 import type { Employee } from "@/types";
+import { AlertTriangle, Loader2 } from "lucide-react";
 
 const schema = z.object({
   firstName: z.string().min(1, "First name is required"),
@@ -29,8 +33,11 @@ const schema = z.object({
   department: z.enum(["Engineering", "Finance", "HR", "Sales", "Marketing", "Operations", "IT"]),
   designation: z.string().min(1, "Designation is required"),
   employmentType: z.enum(["Full-time", "Part-time", "Contractor", "Intern"]),
+  category: z.enum(["Permanent", "Contract", "Consultant", "Intern", "Temporary", "Rent Candidate", "Other"]),
   joiningDate: z.string().min(1, "Joining date is required"),
   workLocation: z.string().min(1, "Work location is required"),
+  state: z.string().min(1, "State is required"),
+  uan: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -43,23 +50,50 @@ interface AddEmployeeDialogProps {
 
 export function AddEmployeeDialog({ open, onOpenChange, onCreated }: AddEmployeeDialogProps) {
   const [submitting, setSubmitting] = useState(false);
+  const [uanCheck, setUanCheck] = useState<{ checking: boolean; duplicate?: Employee }>({ checking: false });
   const {
     control,
     register,
     handleSubmit,
     reset,
+    watch,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       department: "Engineering",
       employmentType: "Full-time",
+      category: "Permanent",
+      state: indianStates[0],
     },
   });
 
+  const category = watch("category");
+  const uan = watch("uan");
+
+  const runUanCheck = useCallback(async (value: string) => {
+    if (!value.trim()) {
+      setUanCheck({ checking: false, duplicate: undefined });
+      return;
+    }
+    setUanCheck({ checking: true });
+    const match = await checkDuplicateUAN(value);
+    setUanCheck({ checking: false, duplicate: match });
+  }, []);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => runUanCheck(uan ?? ""), 400);
+    return () => clearTimeout(timeout);
+  }, [uan, runUanCheck]);
+
   async function onSubmit(values: FormValues) {
+    if (uanCheck.duplicate) {
+      toast.error("Cannot add employee with a duplicate UAN", { description: "Resolve the UAN conflict before continuing." });
+      return;
+    }
     setSubmitting(true);
     try {
+      const rentCandidate = values.category === "Rent Candidate";
       const newEmployee = await createEmployee({
         firstName: values.firstName,
         lastName: values.lastName,
@@ -76,21 +110,27 @@ export function AddEmployeeDialog({ open, onOpenChange, onCreated }: AddEmployee
         maritalStatus: "Single",
         address: "",
         city: values.workLocation,
-        state: "",
+        state: values.state,
         pincode: "",
         emergencyContact: { name: "", relation: "", phone: "" },
         workLocation: values.workLocation,
         nationality: "Indian",
         languages: ["English"],
-        bankDetails: { accountHolderName: "", accountNumber: "", ifscCode: "", bankName: "", branch: "" },
-        statutory: { pan: "", aadhaar: "" },
+        bankDetails: { accountHolderName: `${values.firstName} ${values.lastName}`, accountNumber: "", ifscCode: "", bankName: "", branch: "" },
+        statutory: { pan: "", aadhaar: "", uan: values.uan || undefined },
         salaryStructureId: "ss-1",
         ctc: 600000,
         employmentType: values.employmentType,
+        category: values.category,
       });
-      toast.success("Employee added", { description: `${newEmployee.fullName} has been added to the organization.` });
+      toast.success("Employee added", {
+        description: rentCandidate
+          ? `${newEmployee.fullName} added. PF/ESI default to Not Applicable for Rent Candidate — override in KYC & Statutory if needed.`
+          : `${newEmployee.fullName} has been added to the organization.`,
+      });
       onCreated(newEmployee);
       reset();
+      setUanCheck({ checking: false });
       onOpenChange(false);
     } finally {
       setSubmitting(false);
@@ -182,17 +222,88 @@ export function AddEmployeeDialog({ open, onOpenChange, onCreated }: AddEmployee
             </div>
           </div>
 
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Employment Category</Label>
+              <Controller
+                control={control}
+                name="category"
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={(v) => v && field.onChange(v)}>
+                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {employmentCategories.map((c) => (
+                        <SelectItem key={c} value={c}>{c}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>State</Label>
+              <Controller
+                control={control}
+                name="state"
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={(v) => v && field.onChange(v)}>
+                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {indianStates.map((s) => (
+                        <SelectItem key={s} value={s}>{s}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+              {errors.state && <p className="text-xs text-danger">{errors.state.message}</p>}
+            </div>
+          </div>
+
+          {category === "Rent Candidate" && (
+            <div className="flex items-start gap-2 rounded-lg bg-blue-50 px-3 py-2.5 text-xs text-primary ring-1 ring-inset ring-blue-200">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              Statutory Applicability for Rent Candidate defaults to PF: Not Applicable, ESI: Not Applicable. This can be overridden later in KYC &amp;
+              Statutory.
+            </div>
+          )}
+
           <div className="space-y-1.5">
             <Label htmlFor="workLocation">Work Location</Label>
             <Input id="workLocation" {...register("workLocation")} placeholder="Bengaluru" />
             {errors.workLocation && <p className="text-xs text-danger">{errors.workLocation.message}</p>}
           </div>
 
+          <div className="space-y-1.5">
+            <Label htmlFor="uan">UAN Number (optional)</Label>
+            <div className="relative">
+              <Input id="uan" {...register("uan")} placeholder="100234500129" className={uanCheck.duplicate ? "border-danger pr-9" : "pr-9"} />
+              {uanCheck.checking && <Loader2 className="absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />}
+            </div>
+            {uanCheck.duplicate && (
+              <div className="flex items-start justify-between gap-2 rounded-lg bg-rose-50 px-3 py-2 text-xs ring-1 ring-inset ring-rose-200">
+                <div>
+                  <StatusBadge status="Duplicate UAN" />
+                  <p className="mt-1 text-foreground/80">
+                    UAN already exists for employee {uanCheck.duplicate.employeeCode} — {uanCheck.duplicate.fullName}.
+                  </p>
+                </div>
+                <Link
+                  href={`/employees/${uanCheck.duplicate.id}`}
+                  target="_blank"
+                  className="shrink-0 whitespace-nowrap text-xs font-medium text-primary hover:underline"
+                >
+                  View Existing Employee
+                </Link>
+              </div>
+            )}
+          </div>
+
           <DialogFooter className="!mt-6">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={submitting}>
+            <Button type="submit" disabled={submitting || uanCheck.checking || !!uanCheck.duplicate}>
               {submitting ? "Adding..." : "Add Employee"}
             </Button>
           </DialogFooter>
