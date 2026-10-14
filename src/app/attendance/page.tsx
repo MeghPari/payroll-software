@@ -1,6 +1,7 @@
 "use client";
 import Link from 'next/link';
 import { MonthlyAttendanceEditor } from '@/components/attendance/monthly-attendance-editor';
+import { dailyAttendanceRoster } from '@/domain/daily-attendance-roster';
 import { PayrollNavigation } from '@/components/payroll/payroll-navigation';
 import { useAppStore } from '@/store/app-store';
 ﻿import { useEffect, useMemo, useState } from "react";
@@ -163,19 +164,11 @@ function TodayAttendanceTab({ employees, loading: employeesLoading }: { employee
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date]);
 
-  const employeeMap = useMemo(() => new Map(employees.map((e) => [e.id, e])), [employees]);
-
-  const rows = useMemo(() => {
-    return records
-      .map((r) => ({ record: r, employee: employeeMap.get(r.employeeId) }))
-      .filter((row): row is { record: DailyAttendanceRecord; employee: Employee } => !!row.employee)
-      .filter(({ record, employee }) => {
-        if (statusFilter !== "All" && record.status !== statusFilter) return false;
-        if (departmentFilter !== "All" && employee.department !== departmentFilter) return false;
-        if (stateFilter !== "All" && employee.state !== stateFilter) return false;
-        return true;
-      });
-  }, [records, employeeMap, statusFilter, departmentFilter, stateFilter]);
+  const roster=useMemo(()=>dailyAttendanceRoster(employees,records,date),[employees,records,date]);
+  const rows=useMemo(()=>roster.filter(({record,employee})=>
+    (statusFilter==='All'||(record?.status??'Not marked')===statusFilter)&&
+    (departmentFilter==='All'||employee.department===departmentFilter)&&
+    (stateFilter==='All'||employee.state===stateFilter)),[roster,statusFilter,departmentFilter,stateFilter]);
 
   const columns: Column<(typeof rows)[number]>[] = [
     {
@@ -193,26 +186,26 @@ function TodayAttendanceTab({ employees, loading: employeesLoading }: { employee
       ),
     },
     { id: "department", header: "Department", accessorFn: (row) => row.employee.department },
-    { id: "shift", header: "Shift", accessorFn: (row) => row.record.shift },
-    { id: "checkIn", header: "Check-In", accessorFn: (row) => row.record.checkIn, cell: ({ row }) => row.original.record.checkIn || "â€”" },
-    { id: "checkOut", header: "Check-Out", accessorFn: (row) => row.record.checkOut, cell: ({ row }) => row.original.record.checkOut || "â€”" },
+    { id: "shift", header: "Shift", accessorFn: (row) => row.record?.shift },
+    { id: "checkIn", header: "Check-In", accessorFn: (row) => row.record?.checkIn, cell: ({ row }) => row.original.record?.checkIn || "--" },
+    { id: "checkOut", header: "Check-Out", accessorFn: (row) => row.record?.checkOut, cell: ({ row }) => row.original.record?.checkOut || "--" },
     {
       id: "workHours",
       header: "Working Hours",
-      accessorFn: (row) => row.record.workHours,
-      cell: ({ row }) => (row.original.record.workHours ? `${Math.floor(row.original.record.workHours)}h ${Math.round((row.original.record.workHours % 1) * 60)}m` : "â€”"),
+      accessorFn: (row) => row.record?.workHours,
+      cell: ({ row }) => (row.original.record?.workHours ? `${Math.floor(row.original.record.workHours)}h ${Math.round((row.original.record.workHours % 1) * 60)}m` : "--"),
     },
-    { id: "status", header: "Status", accessorFn: (row) => row.record.status, cell: ({ row }) => <StatusBadge status={row.original.record.status} /> },
+    { id: "status", header: "Status", accessorFn: (row) => row.record?.status, cell: ({ row }) => <StatusBadge status={row.original.record?.status??"Not marked"} /> },
     {
       id: "lateBy",
       header: "Late By",
-      accessorFn: (row) => lateMinutes(row.record.checkIn,row.record.scheduledStart),
+      accessorFn: (row) => lateMinutes(row.record?.checkIn??'',row.record?.scheduledStart),
       cell: ({ row }) => {
-        const late = lateMinutes(row.original.record.checkIn,row.original.record.scheduledStart);
-        return late > 0 ? <span className="text-warning">{late} min late</span> : "â€”";
+        const late = lateMinutes(row.original.record?.checkIn??'',row.original.record?.scheduledStart);
+        return late > 0 ? <span className="text-warning">{late} min late</span> : "--";
       },
     },
-    { id: "source", header: "Attendance Source", accessorFn: (row) => row.record.source },
+    { id: "source", header: "Attendance Source", accessorFn: (row) => row.record?.source },
     {
       id: "actions",
       header: "",
@@ -221,14 +214,14 @@ function TodayAttendanceTab({ employees, loading: employeesLoading }: { employee
         <Button
           variant="ghost"
           size="sm"
-          className="gap-1 text-primary"
+          className="gap-1 text-primary" disabled={!permitted("attendance.write")}
           onClick={(e) => {
             e.stopPropagation();
-            setEditRecord(row.original.record);
+            setEditRecord(row.original.record??null);
             setEditEmployeeId(row.original.employee.id);
           }}
         >
-          <Pencil className="h-3.5 w-3.5" /> Edit
+          <Pencil className="h-3.5 w-3.5" /> {row.original.record?"Edit":"Mark"}
         </Button>
       ),
     },
@@ -253,8 +246,9 @@ function TodayAttendanceTab({ employees, loading: employeesLoading }: { employee
         </div>
       )}
 
+      <p className="text-sm text-muted-foreground">{roster.filter(row=>!row.record).length} employee(s) have not been marked for this date.</p>
       <SectionCard
-        title="Today's Attendance Register"
+        title="Daily Attendance Register"
         subtitle={format(new Date(date), "dd MMM yyyy (EEEE)")}
         actions={
           <div className="flex flex-wrap items-center gap-2">
@@ -270,7 +264,7 @@ function TodayAttendanceTab({ employees, loading: employeesLoading }: { employee
                 downloadCSV(
                   `attendance_${date}.csv`,
                   ["Employee ID", "Employee Name", "Department", "Status", "Check-In", "Check-Out", "Working Hours"],
-                  rows.map(({ record, employee }) => [employee.employeeCode, employee.fullName, employee.department, record.status, record.checkIn, record.checkOut, record.workHours])
+                  rows.map(({ record, employee }) => [employee.employeeCode, employee.fullName, employee.department, record?.status??"Not marked", record?.checkIn??"", record?.checkOut??"", record?.workHours??""])
                 )
               }
             >
@@ -282,7 +276,7 @@ function TodayAttendanceTab({ employees, loading: employeesLoading }: { employee
       >
         <div className="border-b border-border p-4">
           <FilterBar>
-            <FilterSelect value={statusFilter} onChange={setStatusFilter} options={["All", "Present", "Absent", "Paid Leave", "Unpaid Leave", "Half Day", "Weekly Off", "Holiday", "Work From Home", "Missing Punch"]} placeholder="Status" />
+            <FilterSelect value={statusFilter} onChange={setStatusFilter} options={["All", "Not marked", "Present", "Absent", "Paid Leave", "Unpaid Leave", "Half Day", "Weekly Off", "Holiday", "Work From Home", "Missing Punch"]} placeholder="Status" />
             <FilterSelect value={departmentFilter} onChange={setDepartmentFilter} options={["All", ...new Set(employees.map(e=>e.department).filter(Boolean))]} placeholder="Department" />
             <FilterSelect value={stateFilter} onChange={setStateFilter} options={["All", ...indianStates]} placeholder="State" />
           </FilterBar>
@@ -298,7 +292,7 @@ function TodayAttendanceTab({ employees, loading: employeesLoading }: { employee
         onDone={refresh}
       />
       <MarkEditAttendanceDialog
-        open={!!editRecord}
+        open={!!editEmployeeId}
         onOpenChange={(o) => {
           if (!o) {
             setEditRecord(null);

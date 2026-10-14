@@ -5,6 +5,7 @@ const out=new URL('../.test-output/payroll-views/',import.meta.url);await mkdir(
 async function compile(path,name,replacements={}){let source=await readFile(new URL('../'+path,import.meta.url),'utf8');for(const [from,to]of Object.entries(replacements))source=source.replaceAll(from,to);await writeFile(new URL(name,out),ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.ESNext}}).outputText);}
 await compile('src/domain/dates.ts','dates.mjs');
 await compile('src/domain/attendance-import-date.ts','import-date.mjs');
+await compile('src/domain/daily-attendance-roster.ts','daily-roster.mjs');
 await compile('src/domain/attendance-completeness.ts','completeness.mjs');
 await compile('src/domain/csv.ts','csv.mjs');
 await compile('src/domain/attendance-input.ts','attendance-input.mjs');
@@ -13,6 +14,11 @@ await compile('src/services/payroll.service.ts','payroll.mjs',{'./payroll-run.se
 await compile('src/services/attendance.service.ts','attendance.mjs',{'@/lib/tenant-api':'./fixtures.mjs','@/domain/dates':'./dates.mjs','./employee.service':'./fixtures.mjs','./audit.service':'./fixtures.mjs','@/domain/attendance-completeness':'./completeness.mjs','@/domain/attendance-import-date':'./import-date.mjs'});
 const fixture={runReads:0,employeeReads:0,run:{attendanceFinalized:true,run:{id:'fixture',version:7,status:'Locked',locked_at:'2026-09-30'},workflow:{posted:true,published:true,disbursed:false},snapshots:[{employee_id:'employee',gross_minor:50002,deduction_minor:10001,net_minor:40001,employer_minor:0,snapshot:{baselineGrossMinor:100003,earnings:{basic:50002},deductions:{pf:10001},employer:{},salary:{effectiveFrom:'2026-09-01',structure:'fixture',amounts:{basic:100003}},attendance:{payableDays:15,lopDays:15}}}]},employees:[{id:'employee',status:'Active',joiningDate:'2026-09-29',exitDate:'2026-09-30'}],attendance:[{id:'first',employee_id:'employee',date:'2026-09-29',status:'Half Day',work_minutes:240,overtime_minutes:0},{id:'second',employee_id:'employee',date:'2026-09-30',status:'Missing Punch',work_minutes:0,overtime_minutes:0}]};globalThis.viewFixture=fixture;
 try{
+ const {dailyAttendanceRoster}=await import(new URL('daily-roster.mjs',out));
+ const rosterEmployee={id:'first',joiningDate:'2026-09-01',status:'Active'};
+ const roster=dailyAttendanceRoster([rosterEmployee,{...rosterEmployee,id:'second'},{...rosterEmployee,id:'future',joiningDate:'2026-10-01'},{...rosterEmployee,id:'exited',exitDate:'2026-08-31'},{...rosterEmployee,id:'inactive',status:'Inactive'}],[{employeeId:'first',date:'2026-09-29',status:'Present'},{employeeId:'second',date:'2026-09-28',status:'Absent'}],'2026-09-29');
+ assert.equal(roster.length,2);assert.equal(roster[0].record.status,'Present');assert.equal(roster[1].record,undefined);assert.equal(roster[1].employee.id,'second');
+ console.log('PASS daily roster includes unmarked employees without inventing absence/presence, ignores other dates and respects employment eligibility.');
  const {payrollReviewFromData,payrollPeriodFromData,getPayrollReview}=await import(new URL('payroll.mjs',out));
  const rows=payrollReviewFromData(fixture.run,'2026-09'),period=payrollPeriodFromData(fixture.run,'2026-09');
  assert.equal(fixture.runReads,0);assert.equal(rows[0].adjustedGross,500.02);assert.equal(rows[0].totalDeductions,100.01);assert.equal(rows[0].netPayable,400.01);assert.equal(period.version,7);assert.equal(period.approved,true);assert.equal(period.posted,true);assert.equal(period.disbursed,false);assert.equal(period.status,'Locked');

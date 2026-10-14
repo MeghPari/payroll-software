@@ -14,6 +14,8 @@
 
 ## Live status and limits
 
+Daily attendance roster regression: fixture tests confirm eligible employees appear even without a daily record; other-date records, future joiners, exited and inactive employees are excluded. Missing records remain undefined and display Not marked, rather than being treated as absent/present. Mark opens initial entry for the selected employee; Edit retains the recorded-entry correction flow. No live records were changed by these tests.
+
 Attendance CSV date regression: read/import transport fixtures pass ISO and Indian day-first date normalization, impossible-date/leap-day validation, true month mismatch reporting, mixed-format duplicate denial and canonical ISO submission. The importer uses the shared top-bar payroll month. These checks do not import records into the live database.
 
 Attendance-finalization guidance: salary preparation links to monthly attendance review rather than duplicating its finalize button. Known incomplete-attendance errors include at most three example dates and the count of upcoming dates. Real Route Handler/PostgreSQL fixture tests pass, including message length/action guidance, completeness, finalization/reopening, correction, origin/tenant denial and audit. Payroll completeness requirements remain unchanged.
