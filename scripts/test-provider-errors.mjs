@@ -27,6 +27,8 @@ await writeFile(new URL('proxy-provider.mjs',output),"export function createServ
 await compile('src/proxy.ts','proxy.mjs',{'@supabase/ssr':'./proxy-provider.mjs','next/server':'next/server.js','@/lib/provider-fetch':'./provider-fetch.mjs','@/domain/authentication-errors':'./authentication-errors.mjs','@/lib/session-cookie':'./session-cookie.mjs'});
 const {NextRequest}=await import('next/server.js'),{proxy}=await import(new URL('proxy.mjs',output));const savedUrl=process.env.SUPABASE_URL,savedKey=process.env.SUPABASE_PUBLISHABLE_KEY;
 try{process.env.SUPABASE_URL='https://fixture.supabase.co';process.env.SUPABASE_PUBLISHABLE_KEY='sb_publishable_fixture';globalThis.proxyFixture={calls:0,user:{id:'fixture'},error:null};
+const landing=await proxy(new NextRequest('http://localhost:3000/'));assert.equal(landing.status,307);assert.equal(new URL(landing.headers.get('Location')).pathname,'/dashboard');assert.equal(landing.headers.get('Cache-Control'),'private, no-store');globalThis.proxyFixture.calls=0;
+console.log('PASS verified root navigation redirects to Payroll Home before rendering the access guard.');
 let result=await proxy(new NextRequest('http://localhost:3000/dashboard',{headers:{cookie:'payflow-fixture-signed-out=1; sb-fixture-auth-token=fixture-late-cookie'}}));assert.equal(result.status,307);assert.equal(globalThis.proxyFixture.calls,0);assert.equal(result.headers.get('Cache-Control'),'private, no-store');
 globalThis.proxyFixture.error={name:'AuthRetryableFetchError',status:0};result=await proxy(new NextRequest('http://localhost:3000/dashboard'));assert.equal(result.status,503);assert.equal(result.headers.get('Location'),null);assert.equal(result.headers.get('Retry-After'),'30');
 globalThis.proxyFixture.user=null;globalThis.proxyFixture.error={name:'AuthSessionMissingError',status:400};result=await proxy(new NextRequest('http://localhost:3000/dashboard'));assert.equal(result.status,307);assert.equal(new URL(result.headers.get('Location')).pathname,'/login');
@@ -34,3 +36,21 @@ delete process.env.SUPABASE_URL;const beforeMissing=globalThis.proxyFixture.call
 console.log('PASS missing deployment configuration sends visitors to login without rendering the business shell.');
 console.log('PASS real Next proxy: outage does not redirect to login, genuine missing sessions redirect, and local sign-out blocks late auth cookies.');
 }finally{if(savedUrl===undefined)delete process.env.SUPABASE_URL;else process.env.SUPABASE_URL=savedUrl;if(savedKey===undefined)delete process.env.SUPABASE_PUBLISHABLE_KEY;else process.env.SUPABASE_PUBLISHABLE_KEY=savedKey;delete globalThis.proxyFixture;}
+
+// Render the real access guard: a verified root must release its redirect child.
+const React=await import('react'),{renderToStaticMarkup}=await import('react-dom/server');
+await writeFile(new URL('guard-fixture.mjs',output),`import {createElement} from 'react';export function usePathname(){return globalThis.guardFixture.path;}export function useRouter(){return {replace(){},refresh(){}};}export function useSessionStore(selector){return selector({session:globalThis.guardFixture.session});}export class RequestError extends Error{}export async function api(){throw Error('Effects do not run during this render fixture');}export function Button({children}){return createElement('button',null,children);}`);
+let guardSource=await readFile(new URL('../src/components/layout/backend-access.tsx',import.meta.url),'utf8');
+for(const path of ['next/navigation','@/lib/api-client','@/components/ui/button','@/store/session-store'])guardSource=guardSource.replaceAll(path,'./guard-fixture.mjs');
+await writeFile(new URL('guard.mjs',output),ts.transpileModule(guardSource,{compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX}}).outputText);
+const {BackendAccess}=await import(new URL('guard.mjs',output));
+try{
+ globalThis.guardFixture={path:'/',session:{memberships:[{company_id:'fixture'}]}};
+ const render=()=>renderToStaticMarkup(React.createElement(BackendAccess,null,'PAYROLL_ROUTE_CHILD'));
+ assert.equal(render(),'PAYROLL_ROUTE_CHILD');
+ globalThis.guardFixture.path='/dashboard/';assert.equal(render(),'PAYROLL_ROUTE_CHILD');
+ globalThis.guardFixture.session=null;assert.ok(!render().includes('PAYROLL_ROUTE_CHILD'));
+ globalThis.guardFixture.session={memberships:[]};assert.ok(!render().includes('PAYROLL_ROUTE_CHILD'));
+ globalThis.guardFixture.session={memberships:[{company_id:'fixture'}]};globalThis.guardFixture.path='/unintegrated';assert.ok(!render().includes('PAYROLL_ROUTE_CHILD'));
+ console.log('PASS real access guard releases verified root/trailing-slash routes and blocks anonymous, nonmember and unintegrated routes.');
+}finally{delete globalThis.guardFixture;}

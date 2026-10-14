@@ -14,6 +14,8 @@
 
 ## Live status and limits
 
+Landing-route regression: the real Next proxy sends verified root requests to /dashboard and signed-out requests to /login. A React render fixture verifies the actual client access guard releases verified root/trailing-slash routes, but blocks anonymous, nonmember and unintegrated routes. Production build, TypeScript, lint and local anonymous root/dashboard redirects pass. Authenticated browser acceptance remains pending.
+
 Attendance/salary experience checks: production build, TypeScript and lint pass. All 39 anonymous HTTP checks pass. Read-fixture tests confirm shared payroll views retain captured paise, run versions and payment status without duplicate run reads; attendance preserves employment dates, half days and unresolved punches while reusing the supplied employee list. Authenticated browser/visual acceptance and measured latency remain unverified. The user confirmed the hosted login works after correcting SUPABASE_URL.
 
 Login-entry follow-up: provider/proxy regression checks, TypeScript and lint pass. Local GET /login renders email/password without dashboard navigation; anonymous / and /dashboard redirect to /login. Hosted /api/auth/session returned 503 BACKEND_NOT_CONFIGURED, so production environment setup remains required. Browser visual inspection was unavailable because the browser connection could not initialize.

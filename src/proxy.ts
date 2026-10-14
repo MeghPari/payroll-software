@@ -38,6 +38,12 @@ export async function proxy(request: NextRequest) {
     redirect.headers.set('Cache-Control', 'private, no-store');
     return redirect;
   }
+  if (request.nextUrl.pathname === '/') {
+    const redirect = NextResponse.redirect(new URL('/dashboard', request.url));
+    for (const cookie of response.cookies.getAll()) redirect.cookies.set(cookie);
+    redirect.headers.set('Cache-Control', 'private, no-store');
+    return redirect;
+  }
   response.headers.set('Cache-Control', 'private, no-store');
   return response;
 }
