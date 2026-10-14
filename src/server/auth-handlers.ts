@@ -14,6 +14,7 @@ export const login = endpoint(async request => {
   const client = await db(request.signal);
   const { error } = await client.auth.signInWithPassword(input);
   if (error) {
+    console.error('Sign-in provider rejected request',{name:error.name,status:error.status});
     const failure = authenticationFailure(error);
     throw new ApiError(failure.status, failure.code, failure.message);
   }
