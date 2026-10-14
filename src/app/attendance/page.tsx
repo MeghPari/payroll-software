@@ -621,10 +621,11 @@ function UploadAttendanceTab() {
         <div>
           <p className="text-sm font-semibold text-foreground">Upload an attendance sheet</p>
           <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
-            Select the payroll month, upload a CSV/XLS/XLSX attendance file, validate the records, and import them into the attendance register.
+            Select the payroll month, upload a CSV attendance file, validate the records, and import them into the attendance register.
           </p>
         </div>
         <div className="mt-2 flex gap-2">
+          <a href="/samples/attendance-sample-october-2026.csv" download className="inline-flex items-center rounded-lg border px-3 py-2 text-sm">Download sample CSV</a>
           <Button
             variant="outline"
             className="gap-1.5"
@@ -636,6 +637,7 @@ function UploadAttendanceTab() {
             <UploadCloud className="h-4 w-4" /> Upload Attendance
           </Button>
         </div>
+        <p className="max-w-lg text-xs text-muted-foreground">The sample is for October 2026. Replace TEST_EMP_001 with an existing test employee code whose employment includes October 5–11. Import only unrecorded dates in an open month. Sample rows are not actual attendance.</p>
       </div>
       <BulkUploadAttendanceDialog open={open} onOpenChange={setOpen} onImported={() => toast.success("Attendance imported â€” check Today's Attendance / Register tabs.")} />
     </SectionCard>

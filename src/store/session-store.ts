@@ -1,7 +1,7 @@
 'use client';
 import { create } from 'zustand';
 export interface SessionData {
-  user: { id: string; email?: string };
+  user: { id: string; email?: string; displayName?: string };
   memberships: { company_id: string; role: string; companies: { id: string; name: string } }[];
   permissions: { role: string; permission: string }[];
 }

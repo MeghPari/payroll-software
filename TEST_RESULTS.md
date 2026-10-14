@@ -14,6 +14,8 @@
 
 ## Live status and limits
 
+Display-name/sample follow-up: own-name update tests pass for whitespace normalization, rejection of a supplied target user ID and inactive-account denial. The seven-row October CSV parses with the app's CSV parser and passes attendance input validation after mapping its employee-code placeholder to a fixture UUID. It does not test actual live import or complete-month finalization.
+
 Landing-route regression: the real Next proxy sends verified root requests to /dashboard and signed-out requests to /login. A React render fixture verifies the actual client access guard releases verified root/trailing-slash routes, but blocks anonymous, nonmember and unintegrated routes. Production build, TypeScript, lint and local anonymous root/dashboard redirects pass. Authenticated browser acceptance remains pending.
 
 Attendance/salary experience checks: production build, TypeScript and lint pass. All 39 anonymous HTTP checks pass. Read-fixture tests confirm shared payroll views retain captured paise, run versions and payment status without duplicate run reads; attendance preserves employment dates, half days and unresolved punches while reusing the supplied employee list. Authenticated browser/visual acceptance and measured latency remain unverified. The user confirmed the hosted login works after correcting SUPABASE_URL.

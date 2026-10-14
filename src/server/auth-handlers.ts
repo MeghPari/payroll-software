@@ -31,15 +31,27 @@ export const logout = endpoint(async () => {
 });
 export const session = endpoint(async request => {
   const { client, user } = await authenticated(request.signal,false);
+  const metadataName=[user.user_metadata?.display_name,user.user_metadata?.full_name,user.user_metadata?.name].find(value=>typeof value==='string'&&value.trim());
+  let displayName=typeof metadataName==='string'?metadataName.trim().slice(0,100):'';
+  if(!displayName){const ownProfile=await client.from('user_profiles').select('display_name').eq('id',user.id).maybeSingle();databaseError(ownProfile.error);displayName=ownProfile.data?.display_name?.trim()??'';}
+  const sessionUser={id:user.id,email:user.email,displayName:displayName||'Account'};
   const context=await client.rpc('session_context');
-  if(!context.error)return result({user:{id:user.id,email:user.email},...context.data});
+  if(!context.error)return result({...context.data,user:sessionUser});
   if(!['PGRST202','42883'].includes(context.error.code)){if(context.error.code==='42501'&&context.error.message==='Account inactive or not provisioned')throw new ApiError(403,'ACCOUNT_INACTIVE','Your account is inactive or has not been provisioned.');databaseError(context.error);}
   const profile=await client.from('user_profiles').select('active').eq('id',user.id).maybeSingle();databaseError(profile.error);if(!profile.data?.active)throw new ApiError(403,'ACCOUNT_INACTIVE','Your account is inactive or has not been provisioned.');
   const memberships = await client.from('user_company_roles').select('company_id,role,companies(id,name)').eq('user_id', user.id).eq('active', true);
   databaseError(memberships.error);
   const permissions = await client.from('role_permissions').select('role,permission');
   databaseError(permissions.error);
-  return result({ user: { id: user.id, email: user.email }, memberships: memberships.data, permissions: permissions.data });
+  return result({ user: sessionUser, memberships: memberships.data, permissions: permissions.data });
+});
+export const updateDisplayName=endpoint(async request=>{
+ const {displayName}=await body(request,z.object({displayName:z.string().trim().min(1).max(100)}).strict());
+ const {client}=await authenticated(request.signal);
+ // Display metadata is self-editable and never used to grant roles or company access.
+ const {error}=await client.auth.updateUser({data:{display_name:displayName}});
+ if(error){const failure=authenticationFailure(error,'session');throw new ApiError(failure.status,failure.code,failure.message);}
+ return result({displayName});
 });
 export const resetPassword = endpoint(async request => {
   const { email } = await body(request, z.object({ email: z.string().email().max(254) }).strict());

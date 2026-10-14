@@ -5,6 +5,8 @@ const out=new URL('../.test-output/payroll-views/',import.meta.url);await mkdir(
 async function compile(path,name,replacements={}){let source=await readFile(new URL('../'+path,import.meta.url),'utf8');for(const [from,to]of Object.entries(replacements))source=source.replaceAll(from,to);await writeFile(new URL(name,out),ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.ESNext}}).outputText);}
 await compile('src/domain/dates.ts','dates.mjs');
 await compile('src/domain/attendance-completeness.ts','completeness.mjs');
+await compile('src/domain/csv.ts','csv.mjs');
+await compile('src/domain/attendance-input.ts','attendance-input.mjs');
 await writeFile(new URL('fixtures.mjs',out),`export async function getPayrollRun(){globalThis.viewFixture.runReads++;return globalThis.viewFixture.run;}export async function payrollAction(){throw Error('Read-only fixture');}export const componentCodes=['basic'];export async function getEmployees(){globalThis.viewFixture.employeeReads++;return globalThis.viewFixture.employees;}export async function tenantApi(){return {items:globalThis.viewFixture.attendance,total:globalThis.viewFixture.attendance.length};}export async function getAuditTrail(){return [];}export function getSalaryStructures(){}export function getSalaryStructureById(){}export function updateSalaryStructure(){}export function createSalaryStructure(){}`);
 await compile('src/services/payroll.service.ts','payroll.mjs',{'./payroll-run.service':'./fixtures.mjs','./salary-structure.service':'./fixtures.mjs','@/domain/dates':'./dates.mjs'});
 await compile('src/services/attendance.service.ts','attendance.mjs',{'@/lib/tenant-api':'./fixtures.mjs','@/domain/dates':'./dates.mjs','./employee.service':'./fixtures.mjs','./audit.service':'./fixtures.mjs','@/domain/attendance-completeness':'./completeness.mjs'});
@@ -17,5 +19,10 @@ try{
  const {getMonthlyAttendanceRegister,getEmployeeMonthAttendance}=await import(new URL('attendance.mjs',out));const register=await getMonthlyAttendanceRegister('2026-09',fixture.employees);
  assert.equal(fixture.employeeReads,0);assert.equal(register.length,1);assert.equal(register[0].summary.payrollDays,2);assert.equal(register[0].summary.payableDays,.5);assert.equal(register[0].summary.lopDays,.5);assert.equal(register[0].summary.missing,1);assert.equal((await getEmployeeMonthAttendance('employee','2026-09')).length,2);
  console.log('PASS salary view preserves captured paise, versions and payment state without duplicate run reads; attendance reuses supplied employees and respects employment dates, half days and missing punches.');
+ const {parseCSV}=await import(new URL('csv.mjs',out)),{attendanceInput}=await import(new URL('attendance-input.mjs',out));
+ const sample=parseCSV(await readFile(new URL('../public/samples/attendance-sample-october-2026.csv',import.meta.url),'utf8'));
+ assert.equal(sample.length,7);
+ attendanceInput.parse({rows:sample.map(row=>({employeeId:'00000000-0000-4000-8000-000000000001',date:row.Date,shift:row.Shift,checkIn:row['Check-In'],checkOut:row['Check-Out'],workMinutes:Number(row['Work Hours'])*60,status:row['Attendance Status'],leaveType:row['Leave Type'],overtimeMinutes:Number(row.Overtime)*60,remarks:row.Remarks}))});
+ console.log('PASS sample CSV parses into seven rows and passes the real attendance input schema after replacing its employee-code placeholder.');
  console.log('Read transports are fixtures. No live attendance or salary records were changed.');
 }finally{delete globalThis.viewFixture;}
