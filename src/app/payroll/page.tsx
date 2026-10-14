@@ -48,7 +48,7 @@ import {
   recalculatePayrollMonth,
   type PayrollValidationSummary,
 } from "@/services/payroll.service";
-import { finalizeAttendance } from "@/services/attendance.service";
+
 import { getEmployees } from "@/services/employee.service";
 import { monthKey as monthKeyFromLabel } from '@/domain/dates';
 import { useSessionStore } from '@/store/session-store';
@@ -85,7 +85,7 @@ function PayrollRunPagePeriodContent({month,onMonthChange}:{month:string;onMonth
   const [validation, setValidation] = useState<PayrollValidationSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const [finalizeConfirm, setFinalizeConfirm] = useState(false);
+
   const [approveConfirm, setApproveConfirm] = useState(false);
   const [lockConfirm, setLockConfirm] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -122,18 +122,6 @@ function PayrollRunPagePeriodContent({month,onMonthChange}:{month:string;onMonth
     }),
     [rows]
   );
-
-  async function handleFinalizeAttendance() {
-    setBusy("finalize");
-    try {
-      await finalizeAttendance(monthKey);
-      toast.success(`Attendance finalized for ${month}`);
-      refresh();
-    } catch(error) {toast.error(error instanceof Error?error.message:"Payroll action failed.");} finally {
-      setBusy(null);
-      setFinalizeConfirm(false);
-    }
-  }
 
   async function handleCalculate() {
     setBusy('calculate');
@@ -285,9 +273,7 @@ function PayrollRunPagePeriodContent({month,onMonthChange}:{month:string;onMonth
           finalized ? (
             <StatusBadge status="Attendance Locked for Payroll" tone="success" />
           ) : (
-            <Button size="sm" className="gap-1.5" onClick={() => setFinalizeConfirm(true)} disabled={busy === "finalize"||!permitted("attendance.write")}>
-              <Lock className="h-3.5 w-3.5" /> Finalize Attendance
-            </Button>
+            <Link href="/attendance" className="rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white">Review attendance dates</Link>
           )
         }
       />
@@ -418,15 +404,6 @@ function PayrollRunPagePeriodContent({month,onMonthChange}:{month:string;onMonth
         </Button>
       </div>
 
-      <ConfirmDialog
-        open={finalizeConfirm}
-        onOpenChange={setFinalizeConfirm}
-        title={`Finalize attendance for ${month}?`}
-        description="This locks attendance records for the month and makes them the basis for payroll calculation. Further edits will require an admin override."
-        confirmLabel="Finalize Attendance"
-        loading={busy === "finalize"}
-        onConfirm={handleFinalizeAttendance}
-      />
       <ConfirmDialog
         open={approveConfirm}
         onOpenChange={setApproveConfirm}

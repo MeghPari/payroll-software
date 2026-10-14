@@ -23,6 +23,7 @@ try {
  await writeFile(new URL('env.mjs',output),"export function getEnv(){return {APP_URL:'http://localhost:3000'}}");
  await compile('src/domain/attendance-input.ts','attendance-input.mjs');
  await compile('src/domain/attendance-completeness.ts','attendance-completeness.mjs');
+ await compile('src/domain/dates.ts','dates.mjs');
  await writeFile(new URL('auth.mjs',output),`
  import {ApiError}from './http.mjs';
  const{database,company}=globalThis.attendanceFixture;
@@ -39,7 +40,7 @@ try {
  };
  export async function tenant(request,permission){const id=request.headers.get('x-company-id');if(!id)throw new ApiError(403,'NOT_A_MEMBER','Company access is not allowed.');const allowed=await database.query('select public.has_permission($1,$2) allowed',[id,permission??'attendance.write']);if(!allowed.rows[0].allowed)throw new ApiError(403,'FORBIDDEN','Permission denied.');return{client,companyId:id};}
  `);
- const replacements={'@/server/auth':'./auth.mjs','@/server/http':'./http.mjs','@/domain/attendance-input':'./attendance-input.mjs','@/domain/attendance-completeness':'./attendance-completeness.mjs'};
+ const replacements={'@/server/auth':'./auth.mjs','@/server/http':'./http.mjs','@/domain/attendance-input':'./attendance-input.mjs','@/domain/attendance-completeness':'./attendance-completeness.mjs','@/domain/dates':'./dates.mjs'};
  await compile('src/app/api/attendance/route.ts','attendance.mjs',replacements);
  await compile('src/app/api/attendance/period/route.ts','period.mjs',replacements);
  const attendance=await import(new URL('attendance.mjs',output)),period=await import(new URL('period.mjs',output));
@@ -54,7 +55,7 @@ try {
  await check(attendance.POST,{rows:[row]},403,'INVALID_ORIGIN',company,'https://untrusted.example.invalid');
  await check(attendance.POST,{rows:[row]},403,'FORBIDDEN','20000000-0000-4000-8000-000000000099');
  const missing=await check(period.POST,{month:'2026-09'},422,'ATTENDANCE_INCOMPLETE');
- assert.match(missing.error.message,/FIXTURE: 27 incomplete/);assert.match(missing.error.message,/2026-09-04/);assert.doesNotMatch(missing.error.message,/2026-09-01/);
+ assert.match(missing.error.message,/FIXTURE: 27 incomplete/);assert.match(missing.error.message,/2026-09-04/);assert.doesNotMatch(missing.error.message,/2026-09-01/);assert.ok(missing.error.message.length<350);assert.match(missing.error.message,/View dates/);
  const remaining=Array.from({length:27},(_,index)=>({...row,date:'2026-09-'+String(index+4).padStart(2,'0'),status:(index+4)%7===0?'Weekly Off':'Present'}));
  await check(attendance.POST,{rows:remaining},200);
  await check(period.POST,{month:'2026-09'},200);

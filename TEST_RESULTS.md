@@ -14,6 +14,8 @@
 
 ## Live status and limits
 
+Attendance-finalization guidance: salary preparation links to monthly attendance review rather than duplicating its finalize button. Known incomplete-attendance errors include at most three example dates and the count of upcoming dates. Real Route Handler/PostgreSQL fixture tests pass, including message length/action guidance, completeness, finalization/reopening, correction, origin/tenant denial and audit. Payroll completeness requirements remain unchanged.
+
 Display-name/sample follow-up: own-name update tests pass for whitespace normalization, rejection of a supplied target user ID and inactive-account denial. The seven-row October CSV parses with the app's CSV parser and passes attendance input validation after mapping its employee-code placeholder to a fixture UUID. It does not test actual live import or complete-month finalization.
 
 Landing-route regression: the real Next proxy sends verified root requests to /dashboard and signed-out requests to /login. A React render fixture verifies the actual client access guard releases verified root/trailing-slash routes, but blocks anonymous, nonmember and unintegrated routes. Production build, TypeScript, lint and local anonymous root/dashboard redirects pass. Authenticated browser acceptance remains pending.

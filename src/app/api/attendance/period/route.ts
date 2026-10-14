@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { tenant } from '@/server/auth';
 import { ApiError,body,databaseError,endpoint,result } from '@/server/http';
 import { missingAttendanceDates } from '@/domain/attendance-completeness';
+import { companyToday } from '@/domain/dates';
 export const GET=endpoint(async request=>{
  const {client,companyId}=await tenant(request);const month=z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).parse(new URL(request.url).searchParams.get('month'));
  const response=await client.from('attendance_periods').select('month,finalized_at,finalized_by,version').eq('company_id',companyId).eq('month',`${month}-01`).maybeSingle();databaseError(response.error);return result(response.data);
@@ -21,7 +22,10 @@ export const POST=endpoint(async request=>{
     const attendance=await client.from('attendance_records').select('date,status').eq('company_id',companyId).eq('employee_id',employee.id).gte('date',`${input.month}-01`).lt('date',end.toISOString().slice(0,10));
     databaseError(attendance.error);
     const missing=missingAttendanceDates(input.month,employee.joining_date,employee.exit_date,attendance.data??[]);
-    if(missing.length)throw new ApiError(422,'ATTENDANCE_INCOMPLETE',`${employee.employee_code}: ${missing.length} incomplete attendance date(s) in ${input.month}. Dates: ${missing.join(', ')}. Record actual statuses, including weekly offs and holidays, and resolve Missing Punch entries.`);
+    if(missing.length){
+     const upcoming=missing.filter(date=>date>companyToday()).length;
+     throw new ApiError(422,'ATTENDANCE_INCOMPLETE',`${employee.employee_code}: ${missing.length} incomplete attendance date(s). ${upcoming?`${upcoming} are upcoming dates. `:''}First dates: ${missing.slice(0,3).join(', ')}${missing.length>3?'…':''}. Open Attendance → Monthly review → View dates. Record actual statuses for the full employment month before finalizing.`);
+    }
    }
    if((employees.data?.length??0)<500)break;
   }
