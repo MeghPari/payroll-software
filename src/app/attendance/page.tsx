@@ -424,13 +424,13 @@ function AttendanceRegisterPeriod({employees,loading:employeesLoading,month,setM
       <SectionCard
         title="Monthly Attendance Register"
         subtitle={month}
-        actions={<div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" onClick={()=>setAllColumns(value=>!value)} aria-pressed={allColumns}>{allColumns?'Simple view':'All attendance columns'}</Button><Button variant="outline" disabled={finalized || !permitted('attendance.write')} onClick={()=>setMarkOpen(true)}>Mark Attendance</Button><FilterSelect value={month} onChange={setMonth} options={payrollMonths} className="w-44 bg-white" /></div>}
+        actions={<div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" onClick={()=>setAllColumns(value=>!value)} aria-pressed={allColumns}>{allColumns?'Simple view':'All attendance columns'}</Button><Button variant="outline" disabled={finalized || !permitted('attendance.write')} onClick={()=>setMarkOpen(true)}>Mark multiple dates</Button><FilterSelect value={month} onChange={setMonth} options={payrollMonths} className="w-44 bg-white" /></div>}
         noPadding
       >
         <DataTable columns={allColumns?columns:columns.filter(column=>['employee','missing','review','present','payableDays','lopDays'].includes(column.id??''))} data={onlyMissing?data.filter(row=>row.summary.missing>0):data} loading={loadingAll} pageSize={10} />
       </SectionCard>
       {!finalized&&permitted('attendance.write')&&<Button variant="outline" disabled={loading||finalizing} onClick={async()=>{try{const result=await tenantApi<{affected:number}>('attendance/calendar',{method:'POST',body:JSON.stringify({kind:'apply',month:monthKey+'-01'})});toast.success('Created '+result.affected+' missing nonworking-day records');refresh();}catch(error){toast.error(error instanceof Error?error.message:'Unable to apply reviewed calendar.');}}}>Apply Reviewed Weekly Offs / Holidays</Button>}
-      <MarkEditAttendanceDialog open={markOpen} onOpenChange={setMarkOpen} employees={employees.filter(employee=>!['Inactive','Salary Hold'].includes(employee.status)&&employee.joiningDate<=`${monthKey}-31`&&(!employee.exitDate||employee.exitDate>=`${monthKey}-01`))} date={`${monthKey}-01`} onDone={refresh} />
+      <MarkEditAttendanceDialog open={markOpen} onOpenChange={setMarkOpen} employees={employees.filter(employee=>!['Inactive','Salary Hold'].includes(employee.status)&&employee.joiningDate<=`${monthKey}-31`&&(!employee.exitDate||employee.exitDate>=`${monthKey}-01`))} date={`${monthKey}-01`} allowDateRange onDone={refresh} />
 
       <ConfirmDialog
         open={confirmOpen}

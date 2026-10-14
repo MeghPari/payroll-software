@@ -22,9 +22,10 @@ interface MarkEditAttendanceDialogProps {
   fixedEmployeeId?: string;
   existingRecord?: DailyAttendanceRecord;
   onDone: () => void;
+  allowDateRange?: boolean;
 }
 
-export function MarkEditAttendanceDialog({ open, onOpenChange, employees, date, fixedEmployeeId, existingRecord, onDone }: MarkEditAttendanceDialogProps) {
+export function MarkEditAttendanceDialog({ open, onOpenChange, employees, date, fixedEmployeeId, existingRecord, onDone, allowDateRange=false }: MarkEditAttendanceDialogProps) {
   const [employeeId, setEmployeeId] = useState(fixedEmployeeId ?? existingRecord?.employeeId ?? employees[0]?.id ?? "");
   const [status, setStatus] = useState<AttendanceStatus>(existingRecord?.status ?? "Present");
   const [checkIn, setCheckIn] = useState(existingRecord?.checkIn ?? "");
@@ -73,15 +74,16 @@ export function MarkEditAttendanceDialog({ open, onOpenChange, employees, date, 
     }
     const entryDates: string[] = [];
     if (!existingRecord) {
-      if (!fromDate || !toDate || fromDate > toDate || fromDate.slice(0,7) !== toDate.slice(0,7)) {
+      const firstDate=allowDateRange?fromDate:date,lastDate=allowDateRange?toDate:date;
+      if (!firstDate || !lastDate || firstDate > lastDate || firstDate.slice(0,7) !== lastDate.slice(0,7)) {
         toast.error("Select a valid date range within one month.");return;
       }
-      if (fromDate < employee.joiningDate || (employee.exitDate && toDate > employee.exitDate)) {
+      if (firstDate < employee.joiningDate || (employee.exitDate && lastDate > employee.exitDate)) {
         toast.error("Select dates within this employee’s employment period.");return;
       }
-      if (toDate > companyToday()) { toast.error("Record actual attendance through today. Future dates cannot be marked here.");return; }
-      const cursor = new Date(`${fromDate}T00:00:00Z`);
-      while (cursor.toISOString().slice(0,10) <= toDate) {
+      if (lastDate > companyToday()) { toast.error("Record actual attendance through today. Future dates cannot be marked here.");return; }
+      const cursor = new Date(`${firstDate}T00:00:00Z`);
+      while (cursor.toISOString().slice(0,10) <= lastDate) {
         entryDates.push(cursor.toISOString().slice(0,10));cursor.setUTCDate(cursor.getUTCDate()+1);
       }
     }
@@ -122,7 +124,7 @@ export function MarkEditAttendanceDialog({ open, onOpenChange, employees, date, 
         </DialogHeader>
 
         <div className="space-y-4">
-          {!existingRecord && <div className="space-y-1.5">
+          {!existingRecord && allowDateRange && <div className="space-y-1.5">
             <div className="grid grid-cols-2 gap-3">
               <div><Label htmlFor="attendanceFrom">From Date</Label><Input id="attendanceFrom" type="date" value={fromDate} min={employee?.joiningDate} max={companyToday()} onChange={event=>{setFromDate(event.target.value);if(event.target.value>toDate)setToDate(event.target.value);}} /></div>
               <div><Label htmlFor="attendanceTo">To Date</Label><Input id="attendanceTo" type="date" value={toDate} min={fromDate} max={companyToday()} onChange={event=>setToDate(event.target.value)} /></div>
