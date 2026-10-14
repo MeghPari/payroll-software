@@ -22,6 +22,8 @@ try{
  const {parseCSV}=await import(new URL('csv.mjs',out)),{attendanceInput}=await import(new URL('attendance-input.mjs',out));
  const sample=parseCSV(await readFile(new URL('../public/samples/attendance-sample-october-2026.csv',import.meta.url),'utf8'));
  assert.equal(sample.length,7);
+ const browserSample=JSON.parse(await readFile(new URL('../src/data/attendance-sample.json',import.meta.url),'utf8'));
+ assert.deepEqual(browserSample,sample.map(row=>Object.values(row)),'Browser download must match the standalone CSV sample');
  attendanceInput.parse({rows:sample.map(row=>({employeeId:'00000000-0000-4000-8000-000000000001',date:row.Date,shift:row.Shift,checkIn:row['Check-In'],checkOut:row['Check-Out'],workMinutes:Number(row['Work Hours'])*60,status:row['Attendance Status'],leaveType:row['Leave Type'],overtimeMinutes:Number(row.Overtime)*60,remarks:row.Remarks}))});
  console.log('PASS sample CSV parses into seven rows and passes the real attendance input schema after replacing its employee-code placeholder.');
  console.log('Read transports are fixtures. No live attendance or salary records were changed.');

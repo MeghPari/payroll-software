@@ -66,6 +66,7 @@ import { indianStates } from "@/store/operations-store";
 import { payrollMonths } from "@/store/app-store";
 
 import { downloadCSV } from "@/lib/csv";
+import attendanceSample from "@/data/attendance-sample.json";
 import { ATTENDANCE_IMPORT_COLUMNS } from "@/services/attendance.service";
 import type { DailyAttendanceRecord, Employee, LeaveRequest } from "@/types";
 import { format } from "date-fns";
@@ -625,7 +626,7 @@ function UploadAttendanceTab() {
           </p>
         </div>
         <div className="mt-2 flex gap-2">
-          <a href="/samples/attendance-sample-october-2026.csv" download className="inline-flex items-center rounded-lg border px-3 py-2 text-sm">Download sample CSV</a>
+          <Button variant="outline" onClick={()=>downloadCSV("attendance-sample-october-2026.csv",ATTENDANCE_IMPORT_COLUMNS,attendanceSample)}>Download sample CSV</Button>
           <Button
             variant="outline"
             className="gap-1.5"

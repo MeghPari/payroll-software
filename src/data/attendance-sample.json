@@ -1,0 +1,86 @@
+[
+  [
+    "TEST_EMP_001",
+    "2026-10-05",
+    "General",
+    "09:00",
+    "17:00",
+    "8",
+    "Present",
+    "",
+    "0",
+    "Sample only - normal working day"
+  ],
+  [
+    "TEST_EMP_001",
+    "2026-10-06",
+    "General",
+    "",
+    "",
+    "0",
+    "Absent",
+    "",
+    "0",
+    "Sample only - absence"
+  ],
+  [
+    "TEST_EMP_001",
+    "2026-10-07",
+    "General",
+    "09:00",
+    "13:00",
+    "4",
+    "Half Day",
+    "",
+    "0",
+    "Sample only - half day"
+  ],
+  [
+    "TEST_EMP_001",
+    "2026-10-08",
+    "General",
+    "09:00",
+    "17:00",
+    "8",
+    "Work From Home",
+    "",
+    "0",
+    "Sample only - remote working day"
+  ],
+  [
+    "TEST_EMP_001",
+    "2026-10-09",
+    "General",
+    "09:00",
+    "18:00",
+    "8",
+    "Present",
+    "",
+    "1",
+    "Sample only - eight regular hours and one overtime hour"
+  ],
+  [
+    "TEST_EMP_001",
+    "2026-10-10",
+    "General",
+    "09:00",
+    "17:00",
+    "8",
+    "Present",
+    "",
+    "0",
+    "Sample only - working Saturday"
+  ],
+  [
+    "TEST_EMP_001",
+    "2026-10-11",
+    "General",
+    "",
+    "",
+    "0",
+    "Weekly Off",
+    "",
+    "0",
+    "Sample only - weekly off"
+  ]
+]
