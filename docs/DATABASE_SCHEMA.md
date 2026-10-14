@@ -1,6 +1,6 @@
 # Database schema and migration status
 
-The user confirmed migrations 001-035 applied live. Migrations 036-040 are in the new upgrade-payroll-finance.sql and await live confirmation. All 40 execute in embedded PostgreSQL with fixture Auth/Storage; this is not independent live provider verification. Earlier applied packages are frozen.
+The user confirmed migrations 001-040 applied live, including upgrade-payroll-finance.sql. Do not rerun the applied packages. All 40 execute in embedded PostgreSQL with fixture Auth/Storage; this is not independent live provider verification. Earlier applied packages are frozen.
 
 ## Schema groups
 

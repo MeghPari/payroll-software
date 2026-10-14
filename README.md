@@ -6,7 +6,7 @@ The full requested platform is still in progress and is not verified for product
 
 ## Run locally
 
-Configure the ignored .env.local using .env.example, then run npm install and npm run dev. Open http://localhost:3000/login. The existing SVS Corporate Services project has confirmed migrations 001-035. The next additive package is supabase/upgrade-payroll-finance.sql (036-040). Do not rerun earlier packages or bootstrap.
+Configure the ignored .env.local using .env.example, then run npm install and npm run dev. Open http://localhost:3000/login. The user confirmed migrations 001-040 applied successfully for SVS Corporate Services. All existing SQL packages are applied; do not rerun them or bootstrap.
 
 ## Implemented modules
 

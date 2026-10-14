@@ -2,11 +2,11 @@
 
 ## Existing SVS Corporate Services project
 
-The user confirmed migrations 001-035 applied successfully, most recently upgrade-followup.sql on 14 October 2026. Preserve the existing Auth user and company. Do not rerun setup.sql, upgrade.sql, upgrade-next.sql, upgrade-remaining.sql, upgrade-followup.sql or bootstrap_company.
+The user confirmed migrations 001-040 applied successfully, most recently upgrade-payroll-finance.sql. Preserve the existing Auth user and company. Do not rerun setup.sql, upgrade.sql, upgrade-next.sql, upgrade-remaining.sql, upgrade-followup.sql, upgrade-payroll-finance.sql or bootstrap_company.
 
-The new additive supabase/upgrade-payroll-finance.sql contains only migrations 036-040. Apply the complete file once in the existing project's Supabase SQL Editor as the database administrator. It adds reviewed prior-payroll corrections, cash-flow classification, actual within-month salary payment dates exact half-paise proration rounding and verified session context. Recalculate unapproved payroll after applying. Calculation/approval through the application requires migration 039. The publishable key cannot apply migrations. The package is transactional and tested against existing financial fixtures.
+The applied supabase/upgrade-payroll-finance.sql contains migrations 036-040. The user confirmed successful execution; do not rerun it. It adds reviewed prior-payroll corrections, cash-flow classification, actual within-month salary payment dates, exact half-paise proration rounding and verified session context. Recalculate unapproved payroll after applying. Calculation/approval through the application requires migration 039. The publishable key cannot apply migrations. The package is transactional and tested against existing financial fixtures.
 
-It does not calculate/finalize payroll, change attendance, send transfers or file returns. Existing calendar-proration snapshots, published payslips and recorded payments remain unchanged. After applying, reload http://localhost:3000/login and verify the new workflows with your existing account. MIGRATION_REQUIRED identifies a missing requested function/table.
+It does not calculate/finalize payroll, change attendance, send transfers or file returns. Existing calendar-proration snapshots, published payslips and recorded payments remain unchanged. Reload the deployed PayFlow address, or http://localhost:3000/login for local development, and verify the new workflows with your existing account. MIGRATION_REQUIRED identifies a missing requested function/table.
 
 ## New installations
 

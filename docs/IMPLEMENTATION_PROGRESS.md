@@ -53,7 +53,7 @@ The applied 021-031 package is frozen. The new additive package is **supabase/up
 
 ## Current payroll/finance implementation - migrations 036-040
 
-Migrations 001-035 are confirmed applied. The new supabase/upgrade-payroll-finance.sql package contains only 036-040 and awaits live application. Earlier packages are frozen.
+The user confirmed migrations 001-040 applied successfully, including supabase/upgrade-payroll-finance.sql (036-040). All applied packages are frozen; do not rerun them. Source changes were pushed to the repository default master branch in commit daac610. Vercel deployment and live authenticated verification remain pending.
 
 - Reviewed prior-payroll corrections capture the protected source run/version and financial figures, then apply arrears/recovery in a later eligible payroll month. Published source payroll, payslips, journals and payments are retained. Exited employees still require a separate settlement workflow.
 - Receivables/payables aging reconstructs month-end balances from original posted invoices, notes, receipts/payments and each dated reversal. Current cancellation status does not erase prior-period balances; credit balances remain visible.
