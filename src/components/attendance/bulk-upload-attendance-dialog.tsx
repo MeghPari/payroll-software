@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { BulkUploadDialog, type PreviewColumn } from "@/components/shared/bulk-upload-dialog";
 import { Label } from "@/components/ui/label";
 import { FilterSelect } from "@/components/shared/filter-select";
@@ -10,7 +9,7 @@ import {
   validateAttendanceImport,
   type AttendanceImportRow,
 } from "@/services/attendance.service";
-import { payrollMonths } from "@/store/app-store";
+import { payrollMonths,useAppStore } from "@/store/app-store";
 import { monthKeyFromLabel } from "@/store/operations-store";
 import type { ImportRowResult } from "@/types";
 
@@ -45,14 +44,14 @@ interface BulkUploadAttendanceDialogProps {
 }
 
 export function BulkUploadAttendanceDialog({ open, onOpenChange, onImported }: BulkUploadAttendanceDialogProps) {
-  const [month, setMonth] = useState(payrollMonths[payrollMonths.length - 1]);
+  const month=useAppStore(state=>state.month),setMonth=useAppStore(state=>state.setMonth);
 
   return (
     <BulkUploadDialog<AttendanceImportRow>
       open={open}
       onOpenChange={onOpenChange}
       title="Upload Attendance"
-      description="Import a full attendance sheet for the selected payroll month."
+      description="Import attendance for the selected month. Dates may use YYYY-MM-DD or DD-MM-YYYY (DD/MM/YYYY also works)."
       templateFileName="attendance_import_template.csv"
       templateColumns={ATTENDANCE_IMPORT_COLUMNS}
       sampleRows={[]}
