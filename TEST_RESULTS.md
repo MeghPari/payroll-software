@@ -14,6 +14,8 @@
 
 ## Live status and limits
 
+User-requested sample salaries: sample-salary-setup.sql passes an embedded PostgreSQL fixture with all 40 migrations. Exact monthly gross components total INR 70,000 and INR 80,000; effective dates are September 1 or joining date, whichever is later. Audited RPCs record the assignments; a rerun is rejected without changing history. The script is an operator-run data setup, not an automatic migration or evidence of live application. Bank details and statutory choices remain separate.
+
 Payroll blocker guidance: the actual rendered component is tested for named blocking issues, direct Salary/KYC tab links and omission of passed checks. User-reported September blockers are missing salary coverage, bank details and explicit statutory applicability for both employees. These business inputs have not been invented or changed by tests; actual values remain required.
 
 Daily attendance roster regression: fixture tests confirm eligible employees appear even without a daily record; other-date records, future joiners, exited and inactive employees are excluded. Missing records remain undefined and display Not marked, rather than being treated as absent/present. Mark opens initial entry for the selected employee; Edit retains the recorded-entry correction flow. No live records were changed by these tests.
