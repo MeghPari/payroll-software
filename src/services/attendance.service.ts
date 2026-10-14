@@ -1,244 +1,34 @@
-import { attendanceRecords, attendanceSummary, CURRENT_PAYROLL_MONTH_KEY } from "@/data/mock/attendance";
-import { leaveRequests as mockLeaveRequests, leaveBalances, uploadHistory } from "@/data/mock/leaves";
-import { mockDelay } from "@/lib/async";
-import { attendanceStatuses, attendanceSummaryFor, today, useOperations } from "@/store/operations-store";
-import type {
-  AttendanceRecord,
-  AttendanceStatus,
-  AttendanceSummary,
-  DailyAttendanceRecord,
-  ImportRowResult,
-  ImportRowStatus,
-  LeaveRequest,
-  LeaveRequestStatus,
-  UploadRecord,
-} from "@/types";
-
-const leaveStore: LeaveRequest[] = [...mockLeaveRequests];
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function getAttendance(month: string = CURRENT_PAYROLL_MONTH_KEY): Promise<AttendanceRecord[]> {
-  return mockDelay(attendanceRecords.filter((r) => r.month === month));
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function getAttendanceSummary() {
-  return mockDelay(attendanceSummary);
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function getLeaveRequests(): Promise<LeaveRequest[]> {
-  return mockDelay([...leaveStore]);
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function updateLeaveRequestStatus(id: string, status: LeaveRequestStatus): Promise<LeaveRequest | undefined> {
-  const index = leaveStore.findIndex((r) => r.id === id);
-  if (index === -1) return mockDelay(undefined);
-  leaveStore[index] = { ...leaveStore[index], status };
-  return mockDelay(leaveStore[index]);
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function getLeaveBalances() {
-  return mockDelay(leaveBalances);
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function getUploadHistory() {
-  return mockDelay(uploadHistory);
-}
-
-// ---------------------------------------------------------------------------
-// Daily attendance (Today's Attendance / Attendance Register)
-// ---------------------------------------------------------------------------
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function getDailyAttendance(date: string = today()): Promise<DailyAttendanceRecord[]> {
-  return mockDelay(useOperations.getState().attendance.filter((a) => a.date === date));
-}
-
-export interface TodayAttendanceCounts {
-  total: number;
-  present: number;
-  absent: number;
-  onLeave: number;
-  halfDay: number;
-  weeklyOff: number;
-  late: number;
-  missingPunch: number;
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function getTodayAttendanceSummary(date: string = today()): Promise<TodayAttendanceCounts> {
-  const records = useOperations.getState().attendance.filter((a) => a.date === date);
-  const total = useOperations.getState().employees.length;
-  const present = records.filter((r) => r.status === "Present" || r.status === "Work From Home").length;
-  const absent = records.filter((r) => r.status === "Absent").length;
-  const onLeave = records.filter((r) => r.status === "Paid Leave" || r.status === "Unpaid Leave").length;
-  const halfDay = records.filter((r) => r.status === "Half Day").length;
-  const weeklyOff = records.filter((r) => r.status === "Weekly Off" || r.status === "Holiday").length;
-  const missingPunch = records.filter((r) => r.status === "Missing Punch").length;
-  const late = records.filter((r) => r.status === "Present" && lateMinutes(r.checkIn) > 0).length;
-  return mockDelay({ total, present, absent, onLeave, halfDay, weeklyOff, late, missingPunch });
-}
-
-export function lateMinutes(checkIn: string): number {
-  if (!checkIn) return 0;
-  const [h, m] = checkIn.split(":").map(Number);
-  const minutes = h * 60 + m;
-  const shiftStart = 9 * 60 + 30;
-  return Math.max(0, minutes - shiftStart);
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function updateAttendance(record: DailyAttendanceRecord, reason: string): Promise<DailyAttendanceRecord> {
-  useOperations.getState().upsertAttendance(record, reason);
-  return mockDelay(record, 700);
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function getAttendanceChangeHistory(employeeId?: string) {
-  const entries = useOperations.getState().audit.filter((a) => a.action === "Attendance Modified" && (!employeeId || a.employeeId === employeeId));
-  return mockDelay(entries);
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function finalizeAttendance(month: string): Promise<void> {
-  useOperations.getState().finalizeAttendance(month);
-  return mockDelay(undefined, 1000);
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function isAttendanceFinalized(month: string): Promise<boolean> {
-  return mockDelay(useOperations.getState().finalizedMonths.includes(month));
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function calculateAttendanceSummary(employeeId: string, month: string): Promise<AttendanceSummary> {
-  return mockDelay(attendanceSummaryFor(employeeId, month));
-}
-
-export interface MonthlyRegisterRow {
-  employeeId: string;
-  summary: AttendanceSummary;
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function getMonthlyAttendanceRegister(month: string): Promise<MonthlyRegisterRow[]> {
-  const employees = useOperations.getState().employees;
-  return mockDelay(employees.map((e) => ({ employeeId: e.id, summary: attendanceSummaryFor(e.id, month) })));
-}
-
-// ---------------------------------------------------------------------------
-// Bulk attendance upload
-// ---------------------------------------------------------------------------
-
-export const ATTENDANCE_IMPORT_COLUMNS = [
-  "Employee ID",
-  "Employee Name",
-  "Date",
-  "Shift",
-  "Check-In",
-  "Check-Out",
-  "Work Hours",
-  "Attendance Status",
-  "Leave Type",
-  "Overtime",
-  "Remarks",
-] as const;
-
-export interface AttendanceImportRow {
-  employeeId: string;
-  date: string;
-  shift: string;
-  checkIn: string;
-  checkOut: string;
-  workHours: string;
-  status: string;
-  leaveType: string;
-  overtime: string;
-  remarks: string;
-}
-
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function validateAttendanceImport(rows: AttendanceImportRow[]): Promise<ImportRowResult<AttendanceImportRow>[]> {
-  const state = useOperations.getState();
-  const seen = new Set<string>();
-
-  const results = rows.map((row, index): ImportRowResult<AttendanceImportRow> => {
-    const issues: string[] = [];
-    let status: ImportRowStatus = "Valid";
-    const employee = state.employees.find((e) => e.employeeCode === row.employeeId || e.id === row.employeeId);
-
-    if (!row.employeeId.trim()) {
-      issues.push("Missing Employee ID.");
-      status = "Error";
-    } else if (!employee) {
-      issues.push("Unknown Employee.");
-      status = "Error";
-    }
-
-    if (!DATE_RE.test(row.date)) {
-      issues.push("Invalid Date.");
-      status = "Error";
-    } else if (row.date > today()) {
-      issues.push("Future Date.");
-      status = "Error";
-    }
-
-    if (row.checkIn && !TIME_RE.test(row.checkIn)) issues.push("Invalid Time (Check-In).");
-    if (row.checkOut && !TIME_RE.test(row.checkOut)) issues.push("Invalid Time (Check-Out).");
-
-    if (row.status && !attendanceStatuses.includes(row.status as AttendanceStatus)) {
-      issues.push("Incorrect Leave Code.");
-      status = status === "Error" ? status : "Warning";
-    }
-
-    const key = `${row.employeeId}-${row.date}`;
-    if (seen.has(key)) {
-      issues.push("Duplicate Attendance.");
-      status = "Duplicate";
-    }
-    seen.add(key);
-
-    if (status === "Valid" && issues.length > 0) status = "Warning";
-
-    return { row: index + 1, data: row, status, issues };
-  });
-
-  return mockDelay(results, 900);
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function uploadAttendance(rows: AttendanceImportRow[], month: string): Promise<UploadRecord> {
-  const state = useOperations.getState();
-  const records: DailyAttendanceRecord[] = rows
-    .map((row) => {
-      const employee = state.employees.find((e) => e.employeeCode === row.employeeId || e.id === row.employeeId);
-      if (!employee || !DATE_RE.test(row.date)) return undefined;
-      const record: DailyAttendanceRecord = {
-        id: `${employee.id}-${row.date}`,
-        employeeId: employee.id,
-        date: row.date,
-        shift: row.shift || "09:30 – 18:30",
-        checkIn: row.checkIn,
-        checkOut: row.checkOut,
-        workHours: Number(row.workHours) || 0,
-        status: (attendanceStatuses.includes(row.status as AttendanceStatus) ? row.status : "Present") as AttendanceStatus,
-        leaveType: row.leaveType,
-        overtime: Number(row.overtime) || 0,
-        remarks: row.remarks,
-        source: "Bulk Upload",
-      };
-      return record;
-    })
-    .filter((r): r is DailyAttendanceRecord => !!r);
-
-  const record = state.bulkUploadAttendance(records);
-  void month;
-  return mockDelay(record, 1200);
-}
+import{tenantApi}from '@/lib/tenant-api';import{companyToday,monthKey}from '@/domain/dates';import{getEmployees}from './employee.service';import{getAuditTrail}from './audit.service';
+import type{DailyAttendanceRecord,AttendanceStatus,AttendanceSummary,AttendanceRecord,LeaveRequest,LeaveRequestStatus,LeaveBalance,UploadRecord,UploadHistoryRecord,ImportRowResult}from '@/types';
+import { employmentDates } from '@/domain/attendance-completeness';
+interface Row{scheduled_start?:string|null;id:string;employee_id:string;date:string;status:AttendanceStatus;shift:string;check_in:string|null;check_out:string|null;work_minutes:number;overtime_minutes:number;leave_type:string;remarks:string;source:string;modified_by:string;modified_at:string}
+function view(row:Row):DailyAttendanceRecord{return{scheduledStart:row.scheduled_start??null,id:row.id,employeeId:row.employee_id,date:row.date,status:row.status,shift:row.shift,checkIn:row.check_in?.slice(0,5)??'',checkOut:row.check_out?.slice(0,5)??'',workHours:row.work_minutes/60,overtime:row.overtime_minutes/60,leaveType:row.leave_type,remarks:row.remarks,source:row.source,modifiedBy:row.modified_by,modifiedOn:row.modified_at};}
+async function records(params:string){const rows:DailyAttendanceRecord[]=[];for(let page=1;;page++){const response=await tenantApi<{items:Row[];total:number}>(`attendance?${params}&page=${page}`);rows.push(...response.items.map(view));if(rows.length>=response.total||!response.items.length)break;}return rows;}
+export async function getDailyAttendance(date=companyToday()){return records(`date=${encodeURIComponent(date)}`);}
+export interface TodayAttendanceCounts{total:number;present:number;absent:number;onLeave:number;halfDay:number;weeklyOff:number;late:number|null;missingPunch:number}
+export function lateMinutes(checkIn:string,scheduledStart?:string|null){if(!checkIn||!scheduledStart)return 0;const[h,m]=checkIn.split(':').map(Number),[sh,sm]=scheduledStart.split(':').map(Number);return Math.max(0,h*60+m-sh*60-sm);}
+export async function getTodayAttendanceSummary(date=companyToday()):Promise<TodayAttendanceCounts>{const rows=await getDailyAttendance(date),employees=await getEmployees();const count=(statuses:string[])=>rows.filter(r=>statuses.includes(r.status)).length;return{total:employees.filter(e=>e.joiningDate<=date&&(!e.exitDate||e.exitDate>=date)&&!['Inactive','Salary Hold'].includes(e.status)).length,present:count(['Present','Work From Home']),absent:count(['Absent']),onLeave:count(['Paid Leave','Unpaid Leave']),halfDay:count(['Half Day']),weeklyOff:count(['Weekly Off','Holiday']),late:rows.some(row=>row.scheduledStart)?rows.filter(r=>lateMinutes(r.checkIn,r.scheduledStart)>0).length:null,missingPunch:count(['Missing Punch'])};}
+function payload(row:DailyAttendanceRecord){return{employeeId:row.employeeId,date:row.date,status:row.status,shift:row.shift,checkIn:row.checkIn,checkOut:row.checkOut,workMinutes:Math.round(row.workHours*60),overtimeMinutes:Math.round(row.overtime*60),leaveType:row.leaveType,remarks:row.remarks};}
+export async function updateAttendance(record:DailyAttendanceRecord,reason:string){await tenantApi('attendance',{method:'POST',body:JSON.stringify({reason,rows:[payload(record)],allowUpdate:true})});const row=(await getDailyAttendance(record.date)).find(r=>r.employeeId===record.employeeId);if(!row)throw new Error('Attendance saved but reload failed.');return row;}
+export async function createAttendance(record:DailyAttendanceRecord|DailyAttendanceRecord[]){await tenantApi('attendance',{method:'POST',body:JSON.stringify({rows:(Array.isArray(record)?record:[record]).map(payload),allowUpdate:false})});}
+export async function getAttendanceChangeHistory(employeeId?:string){return getAuditTrail({employeeId,action:'Attendance Modified'});}
+export async function finalizeAttendance(month:string){await tenantApi('attendance/period',{method:'POST',body:JSON.stringify({month:monthKey(month)})});}
+export async function reopenAttendance(month:string,reason:string){await tenantApi('attendance/period',{method:'POST',body:JSON.stringify({month:monthKey(month),reopen:true,reason})});}
+export async function isAttendanceFinalized(month:string){const row=await tenantApi<{finalized_at:string|null}|null>(`attendance/period?month=${monthKey(month)}`);return !!row?.finalized_at;}
+function summary(rows:DailyAttendanceRecord[],days:number):AttendanceSummary{const count=(statuses:string[])=>rows.filter(r=>statuses.includes(r.status)).length;const present=count(['Present','Work From Home']),paidLeave=count(['Paid Leave']),unpaidLeave=count(['Unpaid Leave']),absent=count(['Absent']),halfDays=count(['Half Day']),weeklyOff=count(['Weekly Off']),holidays=count(['Holiday']),missing=count(['Missing Punch'])+Math.max(0,days-rows.length);return{payrollDays:days,present,paidLeave,unpaidLeave,absent,halfDays,weeklyOff,holidays,missing,payableDays:present+paidLeave+weeklyOff+holidays+halfDays/2,lopDays:unpaidLeave+absent+halfDays/2};}
+export async function calculateAttendanceSummary(employeeId:string,month:string){const key=monthKey(month),[employees,rows]=await Promise.all([getEmployees(),records(`month=${key}&employeeId=${encodeURIComponent(employeeId)}`)]),employee=employees.find(row=>row.id===employeeId);if(!employee)throw new Error('Employee could not be loaded.');const dates=new Set(employmentDates(key,employee.joiningDate,employee.exitDate??null));return summary(rows.filter(row=>dates.has(row.date)),dates.size);}
+export interface MonthlyRegisterRow{employeeId:string;summary:AttendanceSummary}
+export async function getMonthlyAttendanceRegister(month:string):Promise<MonthlyRegisterRow[]>{const key=monthKey(month),employees=await getEmployees(),rows=await records(`month=${key}`);return employees.filter(e=>!['Inactive','Salary Hold'].includes(e.status)).flatMap(e=>{const dates=new Set(employmentDates(key,e.joiningDate,e.exitDate??null));return dates.size?[{employeeId:e.id,summary:summary(rows.filter(r=>r.employeeId===e.id&&dates.has(r.date)),dates.size)}]:[];});}
+export async function getAttendance(month=companyToday().slice(0,7)):Promise<AttendanceRecord[]>{return(await getMonthlyAttendanceRegister(month)).map(row=>({id:row.employeeId,employeeId:row.employeeId,month:monthKey(month),presentDays:row.summary.present,paidLeave:row.summary.paidLeave,unpaidLeave:row.summary.unpaidLeave,overtimeHours:0,lopDays:row.summary.lopDays,finalPayableDays:row.summary.payableDays,status:row.summary.missing?'Partial Day':'Present'}));}
+export async function getAttendanceSummary(){const rows=await getTodayAttendanceSummary();return{total:rows.total,present:rows.present,absent:rows.absent,onLeave:rows.onLeave};}
+export interface LeaveData{requests:{id:string;employee_id:string;from_date:string;to_date:string;days:number;reason:string;status:LeaveRequestStatus;applied_at:string;leave_types:{name:LeaveRequest['leaveType']}}[];types:{id:string;name:string;paid:boolean;working_days:number[]}[];balances:{employee_id:string;period_start:string;period_end:string;allocated_days:number;used_days:number;leave_types:{name:string}}[]}
+export async function getLeaveData(){return tenantApi<LeaveData>('leave');}
+export async function getLeaveRequests():Promise<LeaveRequest[]>{return(await getLeaveData()).requests.map(r=>({id:r.id,employeeId:r.employee_id,leaveType:r.leave_types.name,from:r.from_date,to:r.to_date,days:r.days,reason:r.reason,status:r.status,appliedOn:r.applied_at}));}
+export async function updateLeaveRequestStatus(id:string,status:LeaveRequestStatus){if(status==='Pending')throw new Error('A decided request cannot be returned to Pending.');await tenantApi('leave',{method:'POST',body:JSON.stringify({action:'decision',id,status})});return(await getLeaveRequests()).find(r=>r.id===id);}
+export async function getLeaveBalances():Promise<LeaveBalance[]>{const rows=(await getLeaveData()).balances.filter(r=>r.period_start<=companyToday()&&r.period_end>=companyToday()),ids=Array.from(new Set(rows.map(r=>r.employee_id)));return ids.map(employeeId=>{const balance=(name:string)=>{const row=rows.find(r=>r.employee_id===employeeId&&r.leave_types.name===name);return{total:Number(row?.allocated_days??0),used:Number(row?.used_days??0)};};return{employeeId,casualLeave:balance('Casual Leave'),sickLeave:balance('Sick Leave'),earnedLeave:balance('Earned Leave')};});}
+export async function getUploadHistory():Promise<UploadHistoryRecord[]>{return tenantApi('attendance/imports');}
+export const ATTENDANCE_IMPORT_COLUMNS=['Employee ID','Date','Shift','Check-In','Check-Out','Work Hours','Attendance Status','Leave Type','Overtime','Remarks']as const;
+export interface AttendanceImportRow{employeeId:string;employeeName?:string;date:string;shift:string;checkIn:string;checkOut:string;workHours:string;status:string;leaveType:string;overtime:string;remarks:string}
+const statuses=['Present','Absent','Paid Leave','Unpaid Leave','Half Day','Weekly Off','Holiday','Work From Home','Missing Punch'];
+export async function validateAttendanceImport(rows:AttendanceImportRow[],month:string):Promise<ImportRowResult<AttendanceImportRow>[]> {const employees=await getEmployees(),existing=await records(`month=${monthKey(month)}`),seen=new Set(existing.map(r=>`${r.employeeId}/${r.date}`));return rows.map((data,index)=>{const issues:string[]=[],employee=employees.find(e=>e.employeeCode===data.employeeId||e.id===data.employeeId);if(!employee)issues.push('Employee not found.');if(!/^\d{4}-\d{2}-\d{2}$/.test(data.date)||!data.date.startsWith(monthKey(month)))issues.push('Date must be in selected month.');if(!statuses.includes(data.status))issues.push('Invalid attendance status.');const key=`${employee?.id}/${data.date}`;if(seen.has(key))issues.push('Attendance already exists or is duplicated in this file.');seen.add(key);for(const amount of [data.workHours||'0',data.overtime||'0'])if(!Number.isFinite(Number(amount))||Number(amount)<0||Number(amount)>24)issues.push('Hours must be from 0 to 24.');return{row:index+1,data:{...data,employeeName:employee?.fullName},status:issues.length?'Error':'Valid',issues};});}
+export async function bulkImportAttendance(rows:AttendanceImportRow[],month:string):Promise<UploadRecord>{if((await validateAttendanceImport(rows,month)).some(row=>row.status!=='Valid'))throw new Error('Resolve attendance import errors.');const employees=await getEmployees();return tenantApi('attendance/imports',{method:'POST',body:JSON.stringify({reason:'CSV attendance import',rows:rows.map(row=>payload({id:'',employeeId:employees.find(e=>e.id===row.employeeId||e.employeeCode===row.employeeId)!.id,date:row.date,shift:row.shift,checkIn:row.checkIn,checkOut:row.checkOut,workHours:Number(row.workHours)||0,status:row.status as AttendanceStatus,leaveType:row.leaveType,overtime:Number(row.overtime)||0,remarks:row.remarks,source:'CSV'}))})});}

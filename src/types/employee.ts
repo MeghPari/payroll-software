@@ -1,4 +1,4 @@
-export type Department =
+export type Department = (string & {})
   | "Engineering"
   | "Finance"
   | "HR"
@@ -11,9 +11,9 @@ export type EmployeeStatus = "Active" | "Probation" | "On Notice" | "On Leave" |
 
 export type EmploymentCategory = "Permanent" | "Contract" | "Consultant" | "Intern" | "Temporary" | "Rent Candidate" | "Other";
 
-export type Gender = "Male" | "Female" | "Other";
+export type Gender = "Male" | "Female" | "Other" | "";
 
-export type MaritalStatus = "Single" | "Married" | "Divorced" | "Widowed";
+export type MaritalStatus = "Single" | "Married" | "Divorced" | "Widowed" | "";
 
 export interface EmergencyContact {
   name: string;
@@ -38,6 +38,10 @@ export interface StatutoryDetails {
 }
 
 export interface Employee {
+  canReadDocuments?: boolean;
+  managerId?:string|null;
+  version?: number;
+  salaryConfigured?: boolean;
   id: string;
   employeeCode: string;
   firstName: string;
@@ -51,6 +55,7 @@ export interface Employee {
   designation: string;
   status: EmployeeStatus;
   joiningDate: string;
+  exitDate?: string | null;
   dateOfBirth: string;
   gender: Gender;
   bloodGroup: string;

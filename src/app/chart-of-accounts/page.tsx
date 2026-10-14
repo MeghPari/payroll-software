@@ -1,5 +1,6 @@
 "use client";
 
+import { PeriodsPanel } from '@/components/accounting/periods-panel';
 import { useEffect, useMemo, useState } from "react";
 import type { Column } from "@/components/shared/data-table";
 import { Upload, FolderPlus, Plus } from "lucide-react";
@@ -13,7 +14,10 @@ import { Button } from "@/components/ui/button";
 import { getChartOfAccounts } from "@/services/accounting.service";
 import { formatINR } from "@/utils/format";
 import type { AccountGroup, AccountType, Ledger } from "@/types";
-import { toast } from "sonner";
+import { toast } from 'sonner';
+import { AccountDialog } from '@/components/accounting/account-dialog';
+import { useSessionStore } from '@/store/session-store';
+import { permitted } from '@/lib/tenant-api';
 
 const typeTone: Record<AccountType, "info" | "danger" | "success" | "warning" | "purple"> = {
   Asset: "info",
@@ -29,7 +33,10 @@ function allDescendantIds(group: AccountGroup): string[] {
   return ids;
 }
 
-export default function ChartOfAccountsPage() {
+export default function ChartOfAccountsPage(){const id=useSessionStore(state=>state.companyId);return <ChartOfAccountsPageTenantContent key={id}/>;}
+function ChartOfAccountsPageTenantContent() {
+  const companyId=useSessionStore(s=>s.companyId);
+  const[dialog,setDialog]=useState<'group'|'ledger'|'year'|null>(null),[refresh,setRefresh]=useState(0);
   const [groups, setGroups] = useState<AccountGroup[]>([]);
   const [ledgers, setLedgers] = useState<Ledger[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,8 +48,8 @@ export default function ChartOfAccountsPage() {
       setGroups(data.groups);
       setLedgers(data.ledgers);
       setLoading(false);
-    });
-  }, []);
+    }).catch(error=>{setGroups([]);setLedgers([]);setLoading(false);toast.error(error.message);});
+  }, [companyId,refresh]);
 
   const filteredLedgers = useMemo(() => {
     let result = ledgers;
@@ -67,18 +74,20 @@ export default function ChartOfAccountsPage() {
 
   return (
     <div>
+      <AccountDialog kind={dialog}onClose={()=>setDialog(null)}onSaved={()=>setRefresh(n=>n+1)}groups={groups}/>
       <PageHeader
         title="Chart of Accounts"
         subtitle="Manage your account groups and ledgers in a structured hierarchy."
         actions={
           <>
-            <Button variant="outline" className="gap-1.5" onClick={() => toast.info("Import Chart — coming soon")}>
+            <Button variant="outline" className="gap-1.5" disabled title="Chart import is awaiting integration">
               <Upload className="h-4 w-4" /> Import Chart
             </Button>
-            <Button variant="outline" className="gap-1.5" onClick={() => toast.info("Add Group — coming soon")}>
+            <Button variant="outline" className="gap-1.5" disabled={!permitted("accounting.write")} onClick={()=>setDialog("group")}>
               <FolderPlus className="h-4 w-4" /> Add Group
             </Button>
-            <Button className="gap-1.5" onClick={() => toast.info("Add Ledger — coming soon")}>
+            <Button variant="outline" disabled={!permitted("accounting.write")} onClick={()=>setDialog("year")}>Financial Year</Button>
+            <Button className="gap-1.5" disabled={!permitted("accounting.write")} onClick={()=>setDialog("ledger")}>
               <Plus className="h-4 w-4" /> Add Ledger
             </Button>
           </>
@@ -114,6 +123,7 @@ export default function ChartOfAccountsPage() {
           <DataTable columns={columns} data={filteredLedgers} loading={loading} pageSize={10} />
         </SectionCard>
       </div>
+      <PeriodsPanel key={companyId}/>
     </div>
   );
 }

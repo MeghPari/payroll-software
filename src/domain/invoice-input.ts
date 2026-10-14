@@ -1,0 +1,9 @@
+import { z } from 'zod';
+const uuid=z.string().uuid();
+export const invoiceDate=z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value=>{const parsed=new Date(`${value}T00:00:00Z`);return Number.isFinite(parsed.getTime())&&parsed.toISOString().slice(0,10)===value;},'Use a valid calendar date.');
+const minor=z.number().int().nonnegative().max(9000000000000);
+export const invoiceInput=z.object({kind:z.enum(['Sales','Purchase']),partyId:uuid,invoiceNumber:z.string().trim().min(1).max(80),date:invoiceDate,dueDate:invoiceDate,taxMode:z.enum(['None','CGST_SGST','IGST']),reviewReference:z.string().trim().max(1000).default(''),controlAccountId:uuid,baseAccountId:uuid,cgstAccountId:uuid.optional(),sgstAccountId:uuid.optional(),igstAccountId:uuid.optional(),items:z.array(z.object({description:z.string().trim().min(1).max(300),quantity:z.string().regex(/^[0-9]+(\.[0-9]{1,3})?$/).refine(value=>Number(value)>0&&Number(value)<1000000000),unitPriceMinor:minor,discountMinor:minor.default(0),taxBasisPoints:z.number().int().min(0).max(10000)}).strict()).min(1).max(100)}).strict().superRefine((input,ctx)=>{
+ if(input.dueDate<input.date)ctx.addIssue({code:z.ZodIssueCode.custom,path:['dueDate'],message:'Due date cannot precede the invoice date.'});
+ if(input.taxMode==='None'&&input.items.some(item=>item.taxBasisPoints>0))ctx.addIssue({code:z.ZodIssueCode.custom,path:['taxMode'],message:'Select the appropriate tax mode for taxable items.'});
+});
+export const partyInput=z.object({kind:z.enum(['Customer','Vendor']),name:z.string().trim().min(1).max(160),email:z.union([z.string().email().max(254),z.literal('')]).default(''),phone:z.string().max(30).default(''),gstin:z.string().trim().max(30).default(''),address:z.string().max(1000).default(''),state:z.string().max(100).default(''),id:uuid.optional(),expectedVersion:z.number().int().positive().optional()}).strict();

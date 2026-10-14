@@ -20,9 +20,12 @@ export interface Ledger {
   status: AccountStatus;
 }
 
-export type InvoiceStatus = "Paid" | "Partial" | "Due" | "Overdue";
+export type InvoiceStatus = "Paid" | "Partial" | "Due" | "Overdue" | "Draft" | "Cancelled";
 
 export interface Invoice {
+  paidAmount?: number;
+  outstandingAmount?: number;
+  version?: number;
   id: string;
   invoiceNumber: string;
   customer: string;
@@ -32,9 +35,12 @@ export interface Invoice {
   dueDate: string;
 }
 
-export type PurchaseInvoiceStatus = "Paid" | "Partial" | "Due" | "Overdue";
+export type PurchaseInvoiceStatus = "Paid" | "Partial" | "Due" | "Overdue" | "Draft" | "Cancelled";
 
 export interface PurchaseInvoice {
+  paidAmount?: number;
+  outstandingAmount?: number;
+  version?: number;
   id: string;
   invoiceNumber: string;
   vendor: string;
@@ -47,6 +53,12 @@ export interface PurchaseInvoice {
 export type VoucherType = "Journal" | "Payment" | "Receipt" | "Contra";
 
 export interface Voucher {
+  status?: 'Draft'|'Posted'|'Cancelled';
+  sourceType?:string;
+  reversalOf?:string|null;
+  hasReversal?:boolean;
+  lines?:{accountId:string;debitMinor:number;creditMinor:number}[];
+  version?:number;
   id: string;
   voucherNumber: string;
   type: VoucherType;

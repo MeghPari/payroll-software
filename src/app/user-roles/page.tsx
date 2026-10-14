@@ -1,83 +1,46 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, ShieldCheck, UserCircle2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Plus, ShieldCheck } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { SectionCard } from "@/components/shared/section-card";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { EmployeeAvatar } from "@/components/shared/employee-avatar";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { roles as roleNames, permissions } from "@/config/permissions";
-import { useOperations } from "@/store/operations-store";
-import type { Role } from "@/types";
-import { toast } from "sonner";
+import { roles as roleNames } from "@/config/permissions";
+import { useSessionStore } from "@/store/session-store";
+import { tenantApi, permitted } from "@/lib/tenant-api";
+import { MemberDialog, type CompanyMember } from "@/components/admin/member-dialog";
 
-const roles = [
-  { id: "role-1", name: "Admin", description: "Full access to all modules including settings and user management.", users: 2, permissions: ["Payroll", "HR", "Accounting", "Settings"] },
-  { id: "role-2", name: "HR Manager", description: "Manage employees, attendance, leave and salary structures.", users: 4, permissions: ["Employees", "Attendance", "Salary Structures"] },
-  { id: "role-3", name: "Finance Manager", description: "Full access to accounting, invoices and financial reports.", users: 3, permissions: ["Accounting", "Invoices", "Reports"] },
-  { id: "role-4", name: "Payroll Executive", description: "Run payroll, generate payslips and view payroll reports.", users: 3, permissions: ["Payroll Run", "Payslips", "Payroll Reports"] },
-  { id: "role-5", name: "Employee", description: "View own profile, payslips and apply for leave.", users: 144, permissions: ["My Profile", "My Payslips", "Leave"] },
-];
 
-const users = [
-  { id: "u1", name: "Admin User", email: "admin@acme.com", role: "Admin", status: "Active" },
-  { id: "u2", name: "Sanjana Rao", email: "sanjana.rao@acme.com", role: "HR Manager", status: "Active" },
-  { id: "u3", name: "Ritu Agarwal", email: "ritu.agarwal@acme.com", role: "Finance Manager", status: "Active" },
-  { id: "u4", name: "Tanvi Shah", email: "tanvi.shah@acme.com", role: "Payroll Executive", status: "Active" },
-];
-
-const allModules = Array.from(new Set(roleNames.flatMap((r) => permissions[r])));
 
 export default function UserRolesPage() {
-  const activeRole = useOperations((s) => s.role);
-  const setRole = useOperations((s) => s.setRole);
-  const [pendingRole, setPendingRole] = useState<Role>(activeRole);
-
+  const companyId=useSessionStore(state=>state.companyId);
+  return <UserRolesContent key={companyId}/>;
+}
+function UserRolesContent() {
+  const session=useSessionStore(state=>state.session);
+  const [members,setMembers]=useState<CompanyMember[]>([]),[editing,setEditing]=useState<CompanyMember|null|undefined>(undefined),[error,setError]=useState('');
+  const [revision,setRevision]=useState(0);
+  useEffect(()=>{let cancelled=false;tenantApi<CompanyMember[]>('users').then(members=>{if(!cancelled){setMembers(members);setError('');}}).catch(error=>{if(!cancelled)setError(error instanceof Error?error.message:'Unable to load users.');});return()=>{cancelled=true;};},[revision]);
+  const permissions=Object.fromEntries(roleNames.map(role=>[role,session?.permissions.filter(row=>row.role===role).map(row=>row.permission)??[]]));
+  const allModules=Array.from(new Set(Object.values(permissions).flat())).sort();
+  const roles=roleNames.map(role=>({id:role,name:role,description:'Database-enforced permissions for '+role+'.',users:members.filter(member=>member.active&&member.role===role).length,permissions:permissions[role]}));
+  const users=members.map(member=>({id:member.user_id,name:member.user_id===session?.user.id?'Your account':member.user_id,email:member.user_id===session?.user.id?session.user.email:member.user_id,role:member.role,status:member.active?'Active':'Inactive'}));
   return (
     <div>
       <PageHeader
         title="User Roles"
         subtitle="Define roles and manage user access across the platform."
         actions={
-          <Button className="gap-1.5" onClick={() => toast.info("Create Role — form coming soon")}>
-            <Plus className="h-4 w-4" /> Create Role
+          <Button className="gap-1.5" disabled={!permitted("users.manage")} onClick={() => setEditing(null)}>
+            <Plus className="h-4 w-4" /> Assign User
           </Button>
         }
       />
 
-      <SectionCard title="Active Demo Role" subtitle="Switches the role attributed to actions you take in this session (e.g. audit trail entries). No backend authorization is enforced yet." className="mb-5">
-        <div className="flex flex-wrap items-center gap-3">
-          <UserCircle2 className="h-5 w-5 text-muted-foreground" />
-          <Select value={pendingRole} onValueChange={(v) => v && setPendingRole(v as Role)}>
-            <SelectTrigger className="w-56">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {roleNames.map((r) => (
-                <SelectItem key={r} value={r}>
-                  {r}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            size="sm"
-            disabled={pendingRole === activeRole}
-            onClick={() => {
-              setRole(pendingRole);
-              toast.success(`Active role switched to ${pendingRole}`);
-            }}
-          >
-            Apply
-          </Button>
-          <span className="text-xs text-muted-foreground">
-            Currently acting as <span className="font-medium text-foreground">{activeRole}</span>
-          </span>
-        </div>
-      </SectionCard>
-
+      {error&&<p role="alert" className="mb-4 rounded-xl border p-4 text-sm text-danger">{error}</p>}
+      <MemberDialog member={editing} onClose={()=>setEditing(undefined)} onSaved={()=>setRevision(value=>value+1)}/>
       <SectionCard title="Permission Matrix" subtitle="Centralized module access per role." className="mb-5" noPadding>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -140,7 +103,7 @@ export default function UserRolesPage() {
               <tr>
                 <th className="px-4 py-2.5">User</th>
                 <th className="px-4 py-2.5">Role</th>
-                <th className="px-4 py-2.5">Status</th>
+                <th className="px-4 py-2.5">Status</th><th className="px-4 py-2.5">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -158,7 +121,7 @@ export default function UserRolesPage() {
                   <td className="px-4 py-3">{u.role}</td>
                   <td className="px-4 py-3">
                     <StatusBadge status={u.status} />
-                  </td>
+                  </td><td className="px-4 py-3"><Button size="sm" variant="outline" disabled={!permitted("users.manage")} onClick={()=>setEditing(members.find(member=>member.user_id===u.id))}>Edit Access</Button></td>
                 </tr>
               ))}
             </tbody>

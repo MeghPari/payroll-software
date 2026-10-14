@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import{companyToday,monthLabel}from '@/domain/dates';
 
 export interface Company {
   id: string;
@@ -10,13 +11,8 @@ export const companies: Company[] = [
   { id: "co-2", name: "Demo Pvt. Ltd." },
 ];
 
-export const payrollMonths = [
-  "January 2026",
-  "February 2026",
-  "March 2026",
-  "April 2026",
-  "May 2026",
-];
+const currentDate=companyToday();
+export const payrollMonths=Array.from({length:24},(_,index)=>{const date=new Date(`${currentDate.slice(0,7)}-01T00:00:00Z`);date.setUTCMonth(date.getUTCMonth()-23+index);return monthLabel(date.toISOString().slice(0,7));});
 
 interface AppState {
   companyId: string;
@@ -30,8 +26,8 @@ interface AppState {
 }
 
 export const useAppStore = create<AppState>((set) => ({
-  companyId: companies[0].id,
-  month: "May 2026",
+  companyId: '',
+  month: monthLabel(currentDate.slice(0,7)),
   sidebarCollapsed: false,
   mobileSidebarOpen: false,
   setCompanyId: (id) => set({ companyId: id }),

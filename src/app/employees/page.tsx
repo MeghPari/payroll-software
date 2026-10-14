@@ -55,7 +55,8 @@ import {
   bulkSetWorkLocation,
   getEmployees,
 } from "@/services/employee.service";
-import { departments, workLocations } from "@/data/mock/employees";
+import { permitted } from '@/lib/tenant-api';
+import { useSessionStore } from '@/store/session-store';
 import { employmentStatuses, indianStates } from "@/store/operations-store";
 import type { Employee, EmployeeStatus } from "@/types";
 import { format } from "date-fns";
@@ -64,9 +65,10 @@ import { toast } from "sonner";
 const statusOptions: (EmployeeStatus | "All")[] = ["All", ...employmentStatuses];
 
 export default function EmployeesPage() {
+  const id=useSessionStore(state=>state.companyId);
   return (
     <Suspense fallback={null}>
-      <EmployeesPageContent />
+      <EmployeesPageContent key={id}/>
     </Suspense>
   );
 }
@@ -82,6 +84,11 @@ function EmployeesPageContent() {
   const [state, setState] = useState("All");
   const [status, setStatus] = useState(searchParams.get("status") ?? "All");
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
+  const [error,setError] = useState('');
+  const companyId = useSessionStore(s=>s.companyId);
+  const departments = Array.from(new Set(employees.map(e=>e.department).filter(Boolean)));
+  const workLocations = Array.from(new Set(employees.map(e=>e.workLocation).filter(Boolean)));
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(() => searchParams.get("add") === "1");
   const [bulkUploadOpen, setBulkUploadOpen] = useState(false);
@@ -94,16 +101,21 @@ function EmployeesPageContent() {
     setLoading(true);
     getEmployees().then((data) => {
       setEmployees(data);
+      setError('');
       setLoading(false);
-    });
+    }).catch(error=>{setEmployees([]);setError(error instanceof Error?error.message:'Unable to load employees.');setLoading(false);});
   }
 
   useEffect(() => {
+    let cancelled=false;
     getEmployees().then((data) => {
+      if(cancelled)return;
       setEmployees(data);
+      setError('');
       setLoading(false);
-    });
-  }, []);
+    }).catch(error=>{if(!cancelled){setEmployees([]);setError(error instanceof Error?error.message:'Unable to load employees.');setLoading(false);}});
+    return ()=>{cancelled=true;};
+  }, [companyId]);
 
   const filtered = useMemo(() => {
     return employees.filter((e) => {
@@ -192,12 +204,12 @@ function EmployeesPageContent() {
           actions={[
             { label: "View Profile", icon: <Eye className="h-4 w-4" />, onClick: () => router.push(`/employees/${row.original.id}`) },
             { label: "Quick View", icon: <Eye className="h-4 w-4" />, onClick: () => openDrawer(row.original) },
-            { label: "Edit Employee", icon: <Pencil className="h-4 w-4" />, onClick: () => toast.info("Edit employee — coming soon") },
+            { label: "Edit Employee", icon: <Pencil className="h-4 w-4" />, onClick: () => {if(!permitted('employees.write')){toast.error('Permission denied.');return;}setEditingEmployee(row.original);setAddOpen(true);} },
             {
-              label: "Remove Employee",
+              label: "Employment Status",
               icon: <Trash2 className="h-4 w-4" />,
               destructive: true,
-              onClick: () => toast.error(`${row.original.fullName} removal requires confirmation`),
+              onClick: () => router.push(`/employees/${row.original.id}?tab=employment`),
             },
           ]}
         />
@@ -212,15 +224,17 @@ function EmployeesPageContent() {
         subtitle="Manage your organization's employees and their details."
         actions={
           <>
-            <Button variant="outline" className="gap-1.5" onClick={() => setBulkUploadOpen(true)}>
+            <Button variant="outline" className="gap-1.5" disabled={!permitted('employees.write')} onClick={() => setBulkUploadOpen(true)}>
               <Upload className="h-4 w-4" /> Bulk Upload
             </Button>
-            <Button className="gap-1.5" onClick={() => setAddOpen(true)}>
+            <Button className="gap-1.5" disabled={!permitted('employees.write')} onClick={() => {setEditingEmployee(null);setAddOpen(true);}}>
               <Plus className="h-4 w-4" /> Add Employee
             </Button>
           </>
         }
       />
+
+      {error && <p role="alert" className="mb-4 text-sm text-danger">{error}</p>}
 
       {loading ? (
         <CardGridSkeleton count={5} />
@@ -250,7 +264,7 @@ function EmployeesPageContent() {
             <FilterSelect value={location} onChange={setLocation} options={["All", ...workLocations]} placeholder="Location" ariaLabel="Filter by location" />
             <FilterSelect value={state} onChange={setState} options={["All", ...indianStates]} placeholder="State" ariaLabel="Filter by state" />
             <FilterSelect value={status} onChange={setStatus} options={statusOptions} placeholder="Status" ariaLabel="Filter by status" />
-            <Button variant="outline" className="gap-1.5">
+            <Button variant="outline" className="gap-1.5" onClick={()=>toast.info('All available employee filters are shown here.')}>
               <SlidersHorizontal className="h-4 w-4" /> More Filters
             </Button>
             {(search || department !== "All" || location !== "All" || state !== "All" || status !== "All") && (
@@ -327,7 +341,7 @@ function EmployeesPageContent() {
       </SectionCard>
 
       <EmployeeDetailDrawer employee={selectedEmployee} open={drawerOpen} onOpenChange={setDrawerOpen} />
-      <AddEmployeeDialog open={addOpen} onOpenChange={setAddOpen} onCreated={() => refresh()} />
+      <AddEmployeeDialog employee={editingEmployee} open={addOpen} onOpenChange={setAddOpen} onCreated={() => refresh()} />
       <BulkUploadEmployeesDialog open={bulkUploadOpen} onOpenChange={setBulkUploadOpen} onImported={refresh} />
 
       <BulkActionDialog

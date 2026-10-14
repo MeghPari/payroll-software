@@ -51,6 +51,7 @@ export function ChangeStatusDialog({ employee, open, onOpenChange, onChanged }: 
     setSubmitting(true);
     try {
       await updateEmployeeStatus(employee.id, {
+        expectedVersion:employee.version,
         status,
         effectiveDate,
         reason,
@@ -62,7 +63,7 @@ export function ChangeStatusDialog({ employee, open, onOpenChange, onChanged }: 
       toast.success(`${employee.fullName}'s status updated to ${status}`);
       onChanged();
       onOpenChange(false);
-    } finally {
+    } catch(error) {toast.error(error instanceof Error?error.message:'Unable to update status.');} finally {
       setSubmitting(false);
     }
   }

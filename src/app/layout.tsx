@@ -4,6 +4,7 @@ import "./globals.css";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import { AppShell } from "@/components/layout/app-shell";
+import { BackendAccess } from "@/components/layout/backend-access";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -28,7 +29,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col bg-background">
         <TooltipProvider delay={200}>
-          <AppShell>{children}</AppShell>
+          <AppShell><BackendAccess>{children}</BackendAccess></AppShell>
           <Toaster position="top-right" richColors closeButton />
         </TooltipProvider>
       </body>

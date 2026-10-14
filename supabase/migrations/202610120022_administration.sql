@@ -1,0 +1,51 @@
+begin;
+insert into public.permissions(code)values('announcements.write'),('support.manage'),('compliance.write');
+insert into public.role_permissions(role,permission)values('Super Admin','announcements.write'),('HR Admin','announcements.write'),('Super Admin','support.manage'),('HR Admin','support.manage'),('Super Admin','compliance.write'),('Finance','compliance.write'),('Payroll Admin','compliance.write');
+create table public.announcements(id uuid primary key default gen_random_uuid(),company_id uuid not null references public.companies(id),title text not null check(length(trim(title))between 1 and 200),body text not null check(length(trim(body))between 1 and 10000),pinned boolean not null default false,status text not null default 'Published'check(status in('Published','Archived')),version integer not null default 1,created_by uuid not null references public.user_profiles(id),created_at timestamptz not null default now(),updated_at timestamptz not null default now(),unique(company_id,id));
+create function public.save_announcement(c uuid,p jsonb)returns uuid language plpgsql security definer set search_path=''as $$declare a uuid;v integer;begin
+ perform public.require_permission(c,'announcements.write');perform 1 from public.companies where id=c for update;
+ a:=nullif(p->>'id','')::uuid;
+ if a is null then insert into public.announcements(company_id,title,body,pinned,created_by)values(c,p->>'title',p->>'body',coalesce((p->>'pinned')::boolean,false),auth.uid())returning id into a;
+ else select version into v from public.announcements where company_id=c and id=a for update;if not found then raise exception 'Announcement not found'using errcode='P0002';end if;if v<>(p->>'expectedVersion')::integer or(p->>'expectedVersion')is null then raise exception 'Announcement changed; refresh'using errcode='40001';end if;
+ update public.announcements set title=p->>'title',body=p->>'body',pinned=coalesce((p->>'pinned')::boolean,false),status=p->>'status',version=version+1,updated_at=now()where company_id=c and id=a;end if;
+ perform public.audit_event(c,'Announcement Saved','announcement',a,jsonb_build_object('status',coalesce(p->>'status','Published')));return a;
+end $$;
+create table public.support_tickets(id uuid primary key default gen_random_uuid(),company_id uuid not null references public.companies(id),subject text not null check(length(trim(subject))between 1 and 200),status text not null default 'Open'check(status in('Open','In Progress','Resolved','Closed')),version integer not null default 1,created_by uuid not null references public.user_profiles(id),created_at timestamptz not null default now(),updated_at timestamptz not null default now(),unique(company_id,id));
+create table public.support_messages(id uuid primary key default gen_random_uuid(),company_id uuid not null,ticket_id uuid not null,body text not null check(length(trim(body))between 1 and 10000),created_by uuid not null references public.user_profiles(id),created_at timestamptz not null default now(),foreign key(company_id,ticket_id)references public.support_tickets(company_id,id));
+create function public.can_read_ticket(c uuid,t uuid)returns boolean language sql stable security definer set search_path=''as $$select public.is_member(c)and exists(select 1 from public.support_tickets where company_id=c and id=t and(created_by=auth.uid()or public.has_permission(c,'support.manage')))$$;
+create function public.save_support_ticket(c uuid,p jsonb)returns uuid language plpgsql security definer set search_path=''as $$declare t uuid;ticket public.support_tickets;next_status text;begin
+ if not public.is_member(c)then raise exception 'Company access denied'using errcode='42501';end if;perform 1 from public.companies where id=c for update;
+ t:=nullif(p->>'id','')::uuid;
+ if t is null then insert into public.support_tickets(company_id,subject,created_by)values(c,p->>'subject',auth.uid())returning id into t;
+ else
+ select * into ticket from public.support_tickets where company_id=c and id=t for update;if not found or not public.can_read_ticket(c,t)then raise exception 'Ticket access denied'using errcode='42501';end if;
+ if ticket.version<>(p->>'expectedVersion')::integer or(p->>'expectedVersion')is null then raise exception 'Ticket changed; refresh'using errcode='40001';end if;
+ next_status:=coalesce(p->>'status',ticket.status);
+ if next_status not in('Open','In Progress','Resolved','Closed')or(next_status in('In Progress','Resolved')and not public.has_permission(c,'support.manage')and next_status<>ticket.status)then raise exception 'Ticket transition denied'using errcode='42501';end if;
+ if ticket.status='Closed'and next_status='Closed'then raise exception 'Reopen the ticket before replying'using errcode='23514';end if;
+ update public.support_tickets set status=next_status,version=version+1,updated_at=now()where company_id=c and id=t;
+ end if;
+ insert into public.support_messages(company_id,ticket_id,body,created_by)values(c,t,p->>'message',auth.uid());
+ perform public.audit_event(c,'Support Ticket Updated','support_ticket',t,jsonb_build_object('status',coalesce(next_status,'Open')));return t;
+end $$;
+create table public.compliance_obligations(id uuid primary key default gen_random_uuid(),company_id uuid not null references public.companies(id),category text not null check(category in('PF','ESI','PT','TDS','GST','LWF','Other')),label text not null check(length(trim(label))between 1 and 200),period date not null check(extract(day from period)=1),due_date date not null,review_reference text not null check(length(trim(review_reference))between 1 and 1000),status text not null default 'Pending'check(status in('Pending','Recorded','Cancelled')),evidence_reference text not null default '',evidence_note text not null default '',recorded_date date,version integer not null default 1,created_by uuid not null references public.user_profiles(id),created_at timestamptz not null default now(),unique(company_id,id),unique(company_id,category,label,period));
+create function public.save_compliance_obligation(c uuid,p jsonb)returns uuid language plpgsql security definer set search_path=''as $$declare o uuid;old public.compliance_obligations;s text;begin
+ perform public.require_permission(c,'compliance.write');perform 1 from public.companies where id=c for update;
+ o:=nullif(p->>'id','')::uuid;
+ if o is null then insert into public.compliance_obligations(company_id,category,label,period,due_date,review_reference,created_by)values(c,p->>'category',p->>'label',(p->>'period')::date,(p->>'dueDate')::date,p->>'reviewReference',auth.uid())returning id into o;
+ else select * into old from public.compliance_obligations where company_id=c and id=o for update;if not found then raise exception 'Obligation not found'using errcode='P0002';end if;
+ if old.version<>(p->>'expectedVersion')::integer or(p->>'expectedVersion')is null then raise exception 'Obligation changed; refresh'using errcode='40001';end if;
+ s:=p->>'status';if s not in('Pending','Recorded','Cancelled')or length(trim(coalesce(p->>'evidenceNote','')))not between 1 and 2000 then raise exception 'Evidence and status required'using errcode='22023';end if;
+ if s='Recorded'and(length(trim(coalesce(p->>'evidenceReference','')))not between 1 and 200 or nullif(p->>'recordedDate','')is null or(p->>'recordedDate')::date>(now()at time zone 'Asia/Kolkata')::date)then raise exception 'Actual filing evidence and date required'using errcode='23514';end if;
+ update public.compliance_obligations set status=s,evidence_reference=coalesce(p->>'evidenceReference',''),evidence_note=p->>'evidenceNote',recorded_date=nullif(p->>'recordedDate','')::date,version=version+1 where company_id=c and id=o;
+ end if;
+ perform public.audit_event(c,'Compliance Evidence Updated','compliance_obligation',o,jsonb_build_object('status',coalesce(s,'Pending'),'reference',coalesce(p->>'evidenceReference','')));return o;
+end $$;
+do $$declare t text;begin foreach t in array array['announcements','support_tickets','support_messages','compliance_obligations']loop execute format('alter table public.%I enable row level security',t);execute format('revoke all on public.%I from anon,authenticated',t);execute format('grant select on public.%I to authenticated',t);end loop;end $$;
+create policy announcement_read on public.announcements for select to authenticated using(public.is_member(company_id)and(status='Published'or public.has_permission(company_id,'announcements.write')));
+create policy ticket_read on public.support_tickets for select to authenticated using(public.can_read_ticket(company_id,id));
+create policy ticket_message_read on public.support_messages for select to authenticated using(public.can_read_ticket(company_id,ticket_id));
+create policy obligation_read on public.compliance_obligations for select to authenticated using(public.has_permission(company_id,'compliance.write')or public.has_permission(company_id,'accounting.read'));
+revoke all on function public.save_announcement(uuid,jsonb),public.can_read_ticket(uuid,uuid),public.save_support_ticket(uuid,jsonb),public.save_compliance_obligation(uuid,jsonb)from public,anon,authenticated;
+grant execute on function public.save_announcement(uuid,jsonb),public.can_read_ticket(uuid,uuid),public.save_support_ticket(uuid,jsonb),public.save_compliance_obligation(uuid,jsonb)to authenticated;
+commit;

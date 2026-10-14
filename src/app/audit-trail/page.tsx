@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { getAuditTrail } from "@/services/audit.service";
 import type { AuditRecord } from "@/types";
 import { History } from "lucide-react";
+import { useSessionStore } from "@/store/session-store";
 
 const ACTIONS = [
   "All",
@@ -27,18 +28,25 @@ const ACTIONS = [
   "Bulk Employee Import",
 ];
 
-export default function AuditTrailPage() {
+export default function AuditTrailPage(){const id=useSessionStore(state=>state.companyId);return <AuditTrailPageTenantContent key={id}/>;}
+function AuditTrailPageTenantContent() {
   const [records, setRecords] = useState<AuditRecord[]>([]);
   const [search, setSearch] = useState("");
   const [action, setAction] = useState("All");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const companyId = useSessionStore(s => s.companyId);
 
   useEffect(() => {
+    let cancelled = false;
     getAuditTrail().then((data) => {
+      if (cancelled) return;
       setRecords(data);
+      setError("");
       setLoading(false);
-    });
-  }, []);
+    }).catch(error => { if (!cancelled) { setRecords([]); setError(error instanceof Error ? error.message : 'Unable to load audit records.'); setLoading(false); } });
+    return () => { cancelled = true; };
+  }, [companyId]);
 
   const filtered = useMemo(() => {
     return records.filter((r) => {
@@ -56,6 +64,7 @@ export default function AuditTrailPage() {
   return (
     <div>
       <PageHeader title="Audit Trail" subtitle="A record of who changed what, and when, across employees, payroll and attendance." />
+      {error && <p role="alert" className="mb-4 text-sm text-danger">{error}</p>}
 
       <SectionCard noPadding>
         <div className="border-b border-border p-4">

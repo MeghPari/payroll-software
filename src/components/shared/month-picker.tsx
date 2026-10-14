@@ -24,7 +24,6 @@ export function MonthPicker() {
         {payrollMonths.map((m) => (
           <DropdownMenuItem key={m} onClick={() => setMonth(m)}>
             {m}
-            {m === "May 2026" && <span className="ml-1.5 text-xs text-muted-foreground">(current)</span>}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>

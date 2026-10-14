@@ -10,42 +10,6 @@ import {
 import type { ImportRowResult } from "@/types";
 import { formatINR } from "@/utils/format";
 
-const SAMPLE_ROWS: (string | number)[][] = [
-  [
-    "EMP0029",
-    "Sample Employee",
-    "Sample",
-    "Employee",
-    "1996-04-12",
-    "Female",
-    "sample.personal@gmail.com",
-    "sample.employee@acme.com",
-    "9876543210",
-    "Parent — 9812345670",
-    "2026-06-01",
-    "Full-time",
-    "Engineering",
-    "Software Engineer",
-    "Bengaluru",
-    "Karnataka",
-    "Siddharth Rao",
-    "ABCDE1234F",
-    "XXXX XXXX 1234",
-    "100234500129",
-    "",
-    "HDFC Bank",
-    "50000001234567",
-    "HDFC0001234",
-    "35000",
-    "70000",
-    "900000",
-    "Yes",
-    "Yes",
-    "Yes",
-    "Yes",
-    "Active",
-  ],
-];
 
 function parseRow(record: Record<string, string>): EmployeeImportRow {
   return {
@@ -97,7 +61,7 @@ export function BulkUploadEmployeesDialog({ open, onOpenChange, onImported }: Bu
       description="Import multiple employee records at once using the standard template."
       templateFileName="employee_import_template.csv"
       templateColumns={EMPLOYEE_IMPORT_COLUMNS}
-      sampleRows={SAMPLE_ROWS}
+      sampleRows={[]}
       parseRow={parseRow}
       validateRows={validateEmployeeImport}
       previewColumns={previewColumns}

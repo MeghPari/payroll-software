@@ -1,6 +1,6 @@
 "use client";
 
-import { useForm, Controller } from "react-hook-form";
+import { useForm, Controller,useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -19,8 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatusBadge } from "@/components/shared/status-badge";
-import { departments } from "@/data/mock/employees";
-import { createEmployee, checkDuplicateUAN } from "@/services/employee.service";
+import { createEmployee, updateEmployee, checkDuplicateUAN } from "@/services/employee.service";
 import { indianStates, employmentCategories } from "@/store/operations-store";
 import type { Employee } from "@/types";
 import { AlertTriangle, Loader2 } from "lucide-react";
@@ -30,7 +29,7 @@ const schema = z.object({
   lastName: z.string().min(1, "Last name is required"),
   email: z.string().email("Enter a valid work email"),
   phone: z.string().min(10, "Enter a valid phone number"),
-  department: z.enum(["Engineering", "Finance", "HR", "Sales", "Marketing", "Operations", "IT"]),
+  department: z.string().trim().min(1,'Department is required').max(100),
   designation: z.string().min(1, "Designation is required"),
   employmentType: z.enum(["Full-time", "Part-time", "Contractor", "Intern"]),
   category: z.enum(["Permanent", "Contract", "Consultant", "Intern", "Temporary", "Rent Candidate", "Other"]),
@@ -46,9 +45,10 @@ interface AddEmployeeDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreated: (employee: Employee) => void;
+  employee?: Employee | null;
 }
 
-export function AddEmployeeDialog({ open, onOpenChange, onCreated }: AddEmployeeDialogProps) {
+export function AddEmployeeDialog({ open, onOpenChange, onCreated, employee }: AddEmployeeDialogProps) {
   const [submitting, setSubmitting] = useState(false);
   const [uanCheck, setUanCheck] = useState<{ checking: boolean; duplicate?: Employee }>({ checking: false });
   const {
@@ -56,20 +56,22 @@ export function AddEmployeeDialog({ open, onOpenChange, onCreated }: AddEmployee
     register,
     handleSubmit,
     reset,
-    watch,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      department: "Engineering",
+      department: "",
       employmentType: "Full-time",
       category: "Permanent",
       state: indianStates[0],
     },
   });
 
-  const category = watch("category");
-  const uan = watch("uan");
+  const category = useWatch({control,name:'category'});
+  const uan = useWatch({control,name:'uan'});
+  useEffect(() => {
+    if (open) reset(employee ? { firstName:employee.firstName,lastName:employee.lastName,email:employee.email,phone:employee.phone,department:employee.department as FormValues['department'],designation:employee.designation,employmentType:employee.employmentType,category:employee.category??'Permanent',joiningDate:employee.joiningDate,workLocation:employee.workLocation,state:employee.state,uan:employee.statutory.uan??'' } : {firstName:'',lastName:'',email:'',phone:'',department:'',designation:'',employmentType:'Full-time',category:'Permanent',joiningDate:'',workLocation:'',state:'',uan:''});
+  }, [open,employee,reset]);
 
   const runUanCheck = useCallback(async (value: string) => {
     if (!value.trim()) {
@@ -77,9 +79,9 @@ export function AddEmployeeDialog({ open, onOpenChange, onCreated }: AddEmployee
       return;
     }
     setUanCheck({ checking: true });
-    const match = await checkDuplicateUAN(value);
-    setUanCheck({ checking: false, duplicate: match });
-  }, []);
+    try { const match = await checkDuplicateUAN(value,employee?.id); setUanCheck({ checking: false, duplicate: match }); }
+    catch (error) { setUanCheck({checking:false}); toast.error(error instanceof Error?error.message:'Unable to validate UAN.'); }
+  }, [employee]);
 
   useEffect(() => {
     const timeout = setTimeout(() => runUanCheck(uan ?? ""), 400);
@@ -93,46 +95,28 @@ export function AddEmployeeDialog({ open, onOpenChange, onCreated }: AddEmployee
     }
     setSubmitting(true);
     try {
-      const rentCandidate = values.category === "Rent Candidate";
-      const newEmployee = await createEmployee({
+      const data = {
         firstName: values.firstName,
         lastName: values.lastName,
         email: values.email,
-        personalEmail: values.email,
         phone: values.phone,
         department: values.department,
         designation: values.designation,
-        status: "Active",
         joiningDate: values.joiningDate,
-        dateOfBirth: "1995-01-01",
-        gender: "Male",
-        bloodGroup: "O+",
-        maritalStatus: "Single",
-        address: "",
-        city: values.workLocation,
         state: values.state,
-        pincode: "",
-        emergencyContact: { name: "", relation: "", phone: "" },
         workLocation: values.workLocation,
-        nationality: "Indian",
-        languages: ["English"],
-        bankDetails: { accountHolderName: `${values.firstName} ${values.lastName}`, accountNumber: "", ifscCode: "", bankName: "", branch: "" },
-        statutory: { pan: "", aadhaar: "", uan: values.uan || undefined },
-        salaryStructureId: "ss-1",
-        ctc: 600000,
+        ...(values.uan ? {statutory:{pan:employee?.statutory.pan??'',aadhaar:'',uan:values.uan,esicNumber:employee?.statutory.esicNumber}} : {}),
         employmentType: values.employmentType,
         category: values.category,
-      });
-      toast.success("Employee added", {
-        description: rentCandidate
-          ? `${newEmployee.fullName} added. PF/ESI default to Not Applicable for Rent Candidate — override in KYC & Statutory if needed.`
-          : `${newEmployee.fullName} has been added to the organization.`,
-      });
+      };
+      const newEmployee = employee ? await updateEmployee(employee.id,{...data,version:employee.version}) : await createEmployee(data);
+      if(!newEmployee) throw new Error('Unable to reload employee.');
+      toast.success(employee ? 'Employee updated' : 'Employee added');
       onCreated(newEmployee);
       reset();
       setUanCheck({ checking: false });
       onOpenChange(false);
-    } finally {
+    } catch(error) { toast.error(error instanceof Error ? error.message : 'Unable to save employee.'); } finally {
       setSubmitting(false);
     }
   }
@@ -141,7 +125,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onCreated }: AddEmployee
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Add Employee</DialogTitle>
+          <DialogTitle>{employee ? 'Edit Employee' : 'Add Employee'}</DialogTitle>
           <DialogDescription>Enter the employee&apos;s basic details. You can complete the rest of the profile later.</DialogDescription>
         </DialogHeader>
 
@@ -174,21 +158,9 @@ export function AddEmployeeDialog({ open, onOpenChange, onCreated }: AddEmployee
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Department</Label>
-              <Controller
-                control={control}
-                name="department"
-                render={({ field }) => (
-                  <Select value={field.value} onValueChange={(v) => v && field.onChange(v)}>
-                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {departments.map((d) => (
-                        <SelectItem key={d} value={d}>{d}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              />
+              <Label htmlFor="department">Department</Label>
+              <Input id="department" {...register('department')}/>
+              {errors.department&&<p className="text-xs text-danger">{errors.department.message}</p>}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="designation">Designation</Label>
@@ -263,8 +235,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onCreated }: AddEmployee
           {category === "Rent Candidate" && (
             <div className="flex items-start gap-2 rounded-lg bg-blue-50 px-3 py-2.5 text-xs text-primary ring-1 ring-inset ring-blue-200">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              Statutory Applicability for Rent Candidate defaults to PF: Not Applicable, ESI: Not Applicable. This can be overridden later in KYC &amp;
-              Statutory.
+              Review and explicitly configure statutory applicability on the employee&apos;s KYC &amp; Statutory tab.
             </div>
           )}
 

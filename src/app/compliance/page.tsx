@@ -1,77 +1,29 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { ShieldCheck, AlertTriangle, CalendarClock, FileCheck2 } from "lucide-react";
-import { PageHeader } from "@/components/shared/page-header";
-import { SectionCard } from "@/components/shared/section-card";
-import { StatCard } from "@/components/shared/stat-card";
-import { AlertCard } from "@/components/shared/alert-card";
-import { StatusBadge } from "@/components/shared/status-badge";
-import { getPayroll } from "@/services/payroll.service";
-import type { PayrollRun } from "@/types";
-
-const complianceItems = [
-  { id: "c1", name: "PF Return (ECR)", frequency: "Monthly", dueDate: "15 Jun 2026", status: "Pending" },
-  { id: "c2", name: "ESI Return", frequency: "Monthly", dueDate: "15 Jun 2026", status: "Pending" },
-  { id: "c3", name: "Professional Tax", frequency: "Monthly", dueDate: "20 Jun 2026", status: "Pending" },
-  { id: "c4", name: "TDS Payment (24Q)", frequency: "Monthly", dueDate: "07 Jun 2026", status: "Completed" },
-  { id: "c5", name: "GSTR-3B Filing", frequency: "Monthly", dueDate: "20 Jun 2026", status: "Pending" },
-  { id: "c6", name: "Labour Welfare Fund", frequency: "Half-Yearly", dueDate: "15 Jul 2026", status: "Completed" },
-];
-
-export default function CompliancePage() {
-  const [payroll, setPayroll] = useState<PayrollRun | null>(null);
-
-  useEffect(() => {
-    getPayroll().then(setPayroll);
-  }, []);
-
-  const critical = payroll?.alerts.filter((a) => a.severity === "critical") ?? [];
-  const warnings = payroll?.alerts.filter((a) => a.severity === "warning") ?? [];
-  const pendingCount = complianceItems.filter((c) => c.status === "Pending").length;
-
-  return (
-    <div>
-      <PageHeader title="Compliance" subtitle="Statutory compliance checklist, filings and payroll alerts." />
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard icon={ShieldCheck} tone="green" label="Compliance Score" value="92%" helperText="Last updated today" />
-        <StatCard icon={CalendarClock} tone="amber" label="Pending Filings" value={String(pendingCount)} />
-        <StatCard icon={AlertTriangle} tone="red" label="Critical Alerts" value={String(critical.length)} />
-        <StatCard icon={FileCheck2} tone="blue" label="Filed This Quarter" value="8" />
-      </div>
-
-      <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <AlertCard tone="critical" title="Critical Alerts" count={critical.length} items={critical.map((a) => a.message)} />
-        <AlertCard tone="warning" title="Warnings" count={warnings.length} items={warnings.map((a) => a.message)} />
-      </div>
-
-      <SectionCard title="Statutory Compliance Checklist" subtitle="Monthly and periodic filing obligations" className="mt-5" noPadding>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50 text-left text-xs font-semibold text-muted-foreground">
-              <tr>
-                <th className="px-4 py-2.5">Compliance Item</th>
-                <th className="px-4 py-2.5">Frequency</th>
-                <th className="px-4 py-2.5">Due Date</th>
-                <th className="px-4 py-2.5">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {complianceItems.map((c) => (
-                <tr key={c.id} className="hover:bg-muted/30">
-                  <td className="px-4 py-3 font-medium text-foreground">{c.name}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{c.frequency}</td>
-                  <td className="px-4 py-3">{c.dueDate}</td>
-                  <td className="px-4 py-3">
-                    <StatusBadge status={c.status} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </SectionCard>
-    </div>
-  );
+'use client';
+import { useEffect,useState } from 'react';
+import { ShieldCheck,AlertTriangle,CalendarClock,FileCheck2,Plus } from 'lucide-react';
+import { PageHeader } from '@/components/shared/page-header';
+import { SectionCard } from '@/components/shared/section-card';
+import { StatCard } from '@/components/shared/stat-card';
+import { StatusBadge } from '@/components/shared/status-badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Dialog,DialogContent,DialogTitle } from '@/components/ui/dialog';
+import { permitted,tenantApi } from '@/lib/tenant-api';
+import { companyToday } from '@/domain/dates';
+import type { Obligation } from '@/domain/compliance';
+import { useSessionStore } from '@/store/session-store';
+import { toast } from 'sonner';
+export default function CompliancePage(){const id=useSessionStore(state=>state.companyId);return <ComplianceContent key={id}/>;}
+function ComplianceContent(){
+ const[rows,setRows]=useState<Obligation[]>([]),[revision,setRevision]=useState(0),[error,setError]=useState(''),[loading,setLoading]=useState(true),[editor,setEditor]=useState<Obligation|null|undefined>(undefined);
+ useEffect(()=>{let cancelled=false;tenantApi<Obligation[]>('compliance').then(rows=>{if(!cancelled){setRows(rows);setError('');}}).catch(error=>{if(!cancelled)setError(error instanceof Error?error.message:'Unable to load compliance records.');}).finally(()=>{if(!cancelled)setLoading(false);});return()=>{cancelled=true;};},[revision]);
+ const active=rows.filter(row=>row.status!=='Cancelled'),recorded=active.filter(row=>row.status==='Recorded'),pending=active.filter(row=>row.status==='Pending'),overdue=pending.filter(row=>row.due_date<companyToday());
+ return <div><PageHeader title="Compliance" subtitle="Reviewed obligations, configured due dates and actual filing evidence." actions={permitted('compliance.write')&&<Button onClick={()=>setEditor(null)}><Plus className="mr-1 h-4 w-4"/>Add Obligation</Button>}/>{error&&<p role="alert" className="mb-4 text-destructive">{error}</p>}<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"><StatCard icon={ShieldCheck} tone="green" label="Evidence Recorded" value={loading?'Loading':active.length?Math.round(recorded.length/active.length*100)+'%':'Not configured'} helperText="Configured obligations only"/><StatCard icon={CalendarClock} tone="amber" label="Pending Obligations" value={loading?'Loading':String(pending.length)}/><StatCard icon={AlertTriangle} tone="red" label="Overdue Obligations" value={loading?'Loading':String(overdue.length)}/><StatCard icon={FileCheck2} tone="blue" label="Recorded Filings" value={loading?'Loading':String(recorded.length)} helperText="Manually reviewed evidence"/></div><SectionCard title="Statutory Compliance Checklist" subtitle="Due dates require an explicit review reference. Recording evidence does not submit a return." className="mt-5" noPadding><div className="overflow-x-auto"><table className="w-full text-sm"><thead className="bg-muted/50 text-left text-xs font-semibold text-muted-foreground"><tr>{['Compliance Item','Period','Due Date','Status','Evidence','Actions'].map(header=><th key={header} className="px-4 py-3">{header}</th>)}</tr></thead><tbody className="divide-y divide-border">{rows.map(row=><tr key={row.id}><td className="px-4 py-3"><p className="font-medium">{row.label}</p><p className="text-xs text-muted-foreground">{row.category}</p></td><td className="px-4 py-3">{row.period.slice(0,7)}</td><td className="px-4 py-3">{row.due_date}</td><td className="px-4 py-3"><StatusBadge status={row.status}/></td><td className="max-w-sm px-4 py-3"><p>{row.evidence_reference||'No filing evidence'}</p><p className="text-xs text-muted-foreground">{row.evidence_note||row.review_reference}</p></td><td className="px-4 py-3">{permitted('compliance.write')&&<Button variant="outline" size="sm" onClick={()=>setEditor(row)}>Record / Correct</Button>}</td></tr>)}</tbody></table>{!rows.length&&!loading&&<p className="p-5 text-muted-foreground">No obligations have been configured.</p>}</div></SectionCard>{editor!==undefined&&<ObligationEditor key={editor?.id??'new'} record={editor} onClose={()=>setEditor(undefined)} onSaved={()=>{setEditor(undefined);setRevision(value=>value+1);}}/>}</div>;
+}
+function ObligationEditor({record,onClose,onSaved}:{record:Obligation|null;onClose:()=>void;onSaved:()=>void}){
+ const[category,setCategory]=useState('PF'),[label,setLabel]=useState(''),[period,setPeriod]=useState(companyToday().slice(0,7)),[due,setDue]=useState(''),[review,setReview]=useState(''),[status,setStatus]=useState(record?.status??'Recorded'),[reference,setReference]=useState(record?.evidence_reference??''),[note,setNote]=useState(''),[date,setDate]=useState(record?.recorded_date??companyToday()),[busy,setBusy]=useState(false);
+ async function save(){setBusy(true);try{await tenantApi('compliance',{method:'POST',body:JSON.stringify(record?{action:'evidence',id:record.id,expectedVersion:record.version,status,evidenceReference:reference,evidenceNote:note,recordedDate:status==='Recorded'?date:''}:{action:'create',category,label,period:period+'-01',dueDate:due,reviewReference:review})});toast.success('Compliance record saved');onSaved();}catch(error){toast.error(error instanceof Error?error.message:'Save failed.');}finally{setBusy(false);}}
+ return <Dialog open onOpenChange={open=>{if(!open&&!busy)onClose();}}><DialogContent><DialogTitle>{record?'Record / Correct Filing Evidence':'Add Reviewed Obligation'}</DialogTitle><form className="space-y-4" onSubmit={event=>{event.preventDefault();void save();}}>{record?<><select value={status} className="h-9 w-full rounded-md border px-3" onChange={event=>setStatus(event.target.value as Obligation['status'])}>{['Pending','Recorded','Cancelled'].map(value=><option key={value}>{value}</option>)}</select><Label htmlFor="filing-reference">Actual Filing Reference</Label><Input id="filing-reference" value={reference} required={status==='Recorded'} maxLength={200} onChange={event=>setReference(event.target.value)}/>{status==='Recorded'&&<><Label htmlFor="filing-date">Actual Filing Date</Label><Input id="filing-date" type="date" required max={companyToday()} value={date} onChange={event=>setDate(event.target.value)}/></>}<Label htmlFor="filing-note">Evidence / Correction Reason</Label><Textarea id="filing-note" value={note} required maxLength={2000} onChange={event=>setNote(event.target.value)}/></>:<><select value={category} className="h-9 w-full rounded-md border px-3" onChange={event=>setCategory(event.target.value)}>{['PF','ESI','PT','TDS','GST','LWF','Other'].map(value=><option key={value}>{value}</option>)}</select><Label htmlFor="obligation-label">Obligation Name</Label><Input id="obligation-label" value={label} required maxLength={200} onChange={event=>setLabel(event.target.value)}/><Label htmlFor="obligation-period">Period</Label><Input id="obligation-period" type="month" required value={period} onChange={event=>setPeriod(event.target.value)}/><Label htmlFor="obligation-due">Reviewed Due Date</Label><Input id="obligation-due" type="date" required value={due} onChange={event=>setDue(event.target.value)}/><Label htmlFor="obligation-review">Rule / Review Reference</Label><Textarea id="obligation-review" value={review} required maxLength={1000} onChange={event=>setReview(event.target.value)}/></>}<Button type="submit" disabled={busy}>Save Record</Button></form></DialogContent></Dialog>;
 }

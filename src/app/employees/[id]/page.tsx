@@ -15,17 +15,29 @@ import { getEmployeeById } from "@/services/employee.service";
 import { getEmployeeKYC } from "@/services/kyc.service";
 import { getSalaryProfile } from "@/services/salary.service";
 import { getActiveSalaryHold } from "@/services/salary.service";
-import { CURRENT_PAYROLL_MONTH } from "@/data/mock/attendance";
+import { companyToday,monthLabel } from '@/domain/dates';
+import { permitted } from '@/lib/tenant-api';
+import { toast } from 'sonner';
+import { useSessionStore } from '@/store/session-store';
+const CURRENT_PAYROLL_MONTH=monthLabel(companyToday().slice(0,7));
 import type { Employee, EmployeeKYC, SalaryHold, SalaryProfile } from "@/types";
+import { DocumentsPanel } from "./documents-panel";
+import { AccountLinkEditor } from "@/components/employees/account-link-editor";
+import { ManagerEditor } from "@/components/employees/manager-editor";
+import { PersonalEditor } from "@/components/employees/personal-editor";
 import { OverviewPanel } from "./overview-panel";
 import { EmploymentPanel } from "./employment-panel";
 import { SalaryPanel } from "./salary-panel";
 import { AttendancePanel } from "./attendance-panel";
 import { KYCPanel } from "./kyc-panel";
-import { DocumentsPanel } from "./documents-panel";
 import { PayrollHistoryPanel } from "./payroll-history-panel";
 
 export default function EmployeeProfilePage() {
+  const companyId=useSessionStore(state=>state.companyId);
+  const params=useParams<{id:string}>();
+  return <EmployeeProfileContent key={`${companyId}/${params.id}`}/>;
+}
+function EmployeeProfileContent() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const employeeId = params.id;
@@ -37,16 +49,20 @@ export default function EmployeeProfilePage() {
   const [statusOpen, setStatusOpen] = useState(false);
   const [holdOpen, setHoldOpen] = useState(false);
   const [releaseOpen, setReleaseOpen] = useState(false);
+  const [loadError,setLoadError]=useState('');
 
   const load = useCallback(async () => {
+    setLoadError('');
+    try {
     const emp = await getEmployeeById(employeeId);
     setEmployee(emp ?? null);
     if (emp) {
-      const [k, s] = await Promise.all([getEmployeeKYC(emp.id), getSalaryProfile(emp.id)]);
+      const [k, s] = await Promise.all([permitted('employees.sensitive')?getEmployeeKYC(emp.id):undefined,permitted('salary.read')?getSalaryProfile(emp.id):undefined]);
       setKyc(k);
       setSalary(s);
-      setHold(getActiveSalaryHold(emp.id, CURRENT_PAYROLL_MONTH));
+      setHold(permitted('salary.read')?await getActiveSalaryHold(emp.id, CURRENT_PAYROLL_MONTH):undefined);
     }
+    } catch(error){setLoadError(error instanceof Error?error.message:'Unable to load employee profile.');}
   }, [employeeId]);
 
   useEffect(() => {
@@ -54,9 +70,10 @@ export default function EmployeeProfilePage() {
     // a synchronous set-state-in-effect — it's the standard data-fetch-on-mount
     // pattern, reused here (instead of inlined) so dialogs can also call it via `onChanged`.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    load();
+    load().catch(error=>toast.error(error instanceof Error?error.message:'Unable to load employee profile.'));
   }, [load]);
 
+  if(loadError)return <div role="alert" className="rounded-xl border bg-card p-5"><p>{loadError}</p><Button variant="outline" className="mt-3" onClick={()=>void load()}>Retry</Button><Link href="/employees" className="ml-4 text-primary">Back to Employees</Link></div>;
   if (employee === null) {
     return (
       <div className="py-16 text-center">
@@ -99,15 +116,15 @@ export default function EmployeeProfilePage() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setStatusOpen(true)}>
+              <Button variant="outline" size="sm" disabled={!permitted('employees.write')} className="gap-1.5" onClick={() => setStatusOpen(true)}>
                 <RefreshCcw className="h-3.5 w-3.5" /> Change Status
               </Button>
               {hold ? (
-                <Button variant="outline" size="sm" className="gap-1.5 text-success border-emerald-200 hover:bg-emerald-50" onClick={() => setReleaseOpen(true)}>
+                <Button variant="outline" size="sm" disabled={!permitted('salary.write')} className="gap-1.5 text-success border-emerald-200 hover:bg-emerald-50" onClick={() => setReleaseOpen(true)}>
                   <PlayCircle className="h-3.5 w-3.5" /> Release Salary
                 </Button>
               ) : (
-                <Button variant="outline" size="sm" className="gap-1.5 text-danger border-rose-200 hover:bg-rose-50" onClick={() => setHoldOpen(true)}>
+                <Button variant="outline" size="sm" disabled={!permitted('salary.write')} className="gap-1.5 text-danger border-rose-200 hover:bg-rose-50" onClick={() => setHoldOpen(true)}>
                   <Ban className="h-3.5 w-3.5" /> Hold Salary
                 </Button>
               )}
@@ -120,18 +137,18 @@ export default function EmployeeProfilePage() {
         <TabsList className="flex-wrap h-auto">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="employment">Employment</TabsTrigger>
-          <TabsTrigger value="salary">Salary</TabsTrigger>
+          <TabsTrigger value="salary" disabled={!permitted('salary.read')}>Salary</TabsTrigger>
           <TabsTrigger value="attendance">Attendance</TabsTrigger>
-          <TabsTrigger value="kyc">KYC &amp; Statutory</TabsTrigger>
-          <TabsTrigger value="documents">Documents</TabsTrigger>
+          <TabsTrigger value="kyc" disabled={!permitted('employees.sensitive')}>KYC &amp; Statutory</TabsTrigger>
+          <TabsTrigger value="documents" disabled={!employee?.canReadDocuments}>Documents</TabsTrigger>
           <TabsTrigger value="history">Payroll History</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-4">
-          {employee && <OverviewPanel employee={employee} />}
+          {employee && <><OverviewPanel employee={employee} /><div className="mt-4"><PersonalEditor key={employee.version} employee={employee} onSaved={load}/></div></>}
         </TabsContent>
         <TabsContent value="employment" className="mt-4">
-          {employee && <EmploymentPanel employee={employee} onChanged={load} />}
+          {employee && <><EmploymentPanel employee={employee} onChanged={load}/><ManagerEditor key={employee.version} employee={employee} onSaved={load}/><AccountLinkEditor key={"account-"+employee.version} employee={employee} onSaved={load}/></>}
         </TabsContent>
         <TabsContent value="salary" className="mt-4">
           {employee && <SalaryPanel employee={employee} salary={salary} onChanged={load} />}
@@ -143,7 +160,7 @@ export default function EmployeeProfilePage() {
           {employee && kyc && <KYCPanel employee={employee} kyc={kyc} onChanged={load} />}
         </TabsContent>
         <TabsContent value="documents" className="mt-4">
-          {employee && kyc && <DocumentsPanel employee={employee} kyc={kyc} onChanged={load} />}
+          {employee && <DocumentsPanel employee={employee}/>}
         </TabsContent>
         <TabsContent value="history" className="mt-4">
           {employee && <PayrollHistoryPanel employee={employee} />}

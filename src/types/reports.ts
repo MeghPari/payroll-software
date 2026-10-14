@@ -6,7 +6,10 @@ export type ReportIconKey =
   | "cash-book"
   | "bank-book"
   | "gst-report"
-  | "payroll-accounting";
+  | "payroll-accounting"
+  | "receivables-aging"
+  | "payables-aging"
+  | "cash-flow";
 
 export interface FinancialReport {
   id: string;

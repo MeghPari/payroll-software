@@ -1,0 +1,7 @@
+import { z } from 'zod';import { tenant } from '@/server/auth';import { ApiError,body,databaseError,endpoint,result } from '@/server/http';import { allRows } from '@/server/paging';
+export const GET=endpoint(async request=>{
+ const {client,companyId}=await tenant(request,'accounting.read'),params=new URL(request.url).searchParams;
+ if(params.has('id')){const id=z.string().uuid().parse(params.get('id')),response=await client.from('gst_book_reviews').select('*').eq('company_id',companyId).eq('id',id).maybeSingle();databaseError(response.error);if(!response.data)throw new ApiError(404,'NOT_FOUND','Archived review not found.');return result(response.data);}
+ const month=z.string().regex(/^\d{4}-(0[1-9]|1[0-2])-01$/).parse(params.get('month'));return result(await allRows((first,last)=>client.from('gst_book_reviews').select('id,month,review_reference,created_at,created_by').eq('company_id',companyId).eq('month',month).order('created_at',{ascending:false}).order('id').range(first,last)));
+});
+export const POST=endpoint(async request=>{const{client,companyId}=await tenant(request,'accounting.write');const input=await body(request,z.object({month:z.string().regex(/^\d{4}-(0[1-9]|1[0-2])-01$/),reference:z.string().trim().min(1).max(1000)}).strict());const response=await client.rpc('capture_gst_book_review',{c:companyId,m:input.month,reference_text:input.reference});databaseError(response.error);return result({id:response.data});});

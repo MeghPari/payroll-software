@@ -18,9 +18,10 @@ interface ReportCardProps {
   title: string;
   description: string;
   onView: () => void;
+  disabled?: boolean;
 }
 
-export function ReportCard({ icon: Icon, tone, title, description, onView }: ReportCardProps) {
+export function ReportCard({ icon: Icon, tone, title, description, onView,disabled }: ReportCardProps) {
   return (
     <div className="flex flex-col rounded-xl border border-border bg-card p-5 shadow-sm">
       <div className={`flex h-11 w-11 items-center justify-center rounded-full ${toneClasses[tone]}`}>
@@ -28,8 +29,8 @@ export function ReportCard({ icon: Icon, tone, title, description, onView }: Rep
       </div>
       <h3 className="mt-3.5 text-[15px] font-semibold text-foreground">{title}</h3>
       <p className="mt-1.5 flex-1 text-xs leading-relaxed text-muted-foreground">{description}</p>
-      <Button variant="outline" size="sm" className="mt-4 w-fit" onClick={onView}>
-        View Report
+      <Button variant="outline" size="sm" className="mt-4 w-fit" onClick={onView} disabled={disabled}>
+        {disabled?'Unavailable':'View Report'}
       </Button>
     </div>
   );

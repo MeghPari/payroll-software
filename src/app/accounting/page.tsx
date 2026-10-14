@@ -1,5 +1,7 @@
 "use client";
 
+import { useSessionStore } from '@/store/session-store';
+import { companyToday } from '@/domain/dates';
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { TrendingUp, TrendingDown, LineChart, Wallet, Landmark, Percent, ArrowDownCircle, PiggyBank } from "lucide-react";
@@ -18,13 +20,15 @@ import { formatINR } from "@/utils/format";
 
 type Overview = Awaited<ReturnType<typeof getAccountingDashboard>>;
 
-export default function AccountingDashboardPage() {
+export default function AccountingDashboardPage(){const id=useSessionStore(state=>state.companyId);return <AccountingContent key={id}/>;}
+function amount(value:number|null){return value===null?'Not available':formatINR(value);}
+function AccountingContent() {
+ const [error,setError]=useState('');
   const [data, setData] = useState<Overview | null>(null);
   const [cashFlow, setCashFlow] = useState<Awaited<ReturnType<typeof getCashFlowHistory>>>([]);
 
   useEffect(() => {
-    getAccountingDashboard().then(setData);
-    getCashFlowHistory().then(setCashFlow);
+    let cancelled=false;Promise.all([getAccountingDashboard(),getCashFlowHistory()]).then(([data,flow])=>{if(!cancelled){setData(data);setCashFlow(flow);}}).catch(error=>{if(!cancelled)setError(error instanceof Error?error.message:'Unable to load accounting data.');});return()=>{cancelled=true;};
   }, []);
 
   const gstData = data
@@ -40,16 +44,16 @@ export default function AccountingDashboardPage() {
 
   return (
     <div>
-      <PageHeader title="Accounting Dashboard" subtitle="Financial overview for revenue, expenses, and cash position." />
+      <PageHeader title="Accounting Dashboard" subtitle="Financial overview from posted books and recorded invoice balances." />{error&&<p role="alert" className="mb-4 text-destructive">{error}</p>}
 
       {!data ? (
         <CardGridSkeleton count={4} />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard icon={TrendingUp} tone="cyan" label="Revenue (MTD)" value={formatINR(data.revenue)} changeLabel="12.6%" changeDirection="up" />
-          <StatCard icon={TrendingDown} tone="red" label="Expenses (MTD)" value={formatINR(data.expenses)} changeLabel="8.3%" changeDirection="down" />
-          <StatCard icon={LineChart} tone="green" label="Net Profit (MTD)" value={formatINR(data.netProfit)} changeLabel="18.9%" changeDirection="up" />
-          <StatCard icon={Landmark} tone="blue" label="Bank Balance" value={formatINR(data.bankBalance)} />
+          <StatCard icon={TrendingUp} tone="cyan" label="Revenue (MTD)" value={amount(data.revenue)} />
+          <StatCard icon={TrendingDown} tone="red" label="Expenses (MTD)" value={amount(data.expenses)} />
+          <StatCard icon={LineChart} tone="green" label="Profit Before Tax (MTD)" value={amount(data.netProfit)} />
+          <StatCard icon={Landmark} tone="blue" label="Bank Balance" value={amount(data.bankBalance)} />
         </div>
       )}
 
@@ -59,10 +63,10 @@ export default function AccountingDashboardPage() {
         </div>
       ) : (
         <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard icon={ArrowDownCircle} tone="amber" label="Payables" value={formatINR(data.payables)} />
-          <StatCard icon={Percent} tone="purple" label="GST Payable" value={formatINR(data.gstPayable)} helperText="Due on 20 May 2026" />
-          <StatCard icon={Wallet} tone="blue" label="Receivables" value={formatINR(data.receivables)} />
-          <StatCard icon={PiggyBank} tone="cyan" label="Cash Balance" value={formatINR(data.cashBalance)} />
+          <StatCard icon={ArrowDownCircle} tone="amber" label="Invoice Payables" value={formatINR(data.payables)} />
+          <StatCard icon={Percent} tone="purple" label="GST Payable" value={amount(data.gstPayable)} helperText="Review GST books and filing evidence" />
+          <StatCard icon={Wallet} tone="blue" label="Invoice Receivables" value={formatINR(data.receivables)} />
+          <StatCard icon={PiggyBank} tone="cyan" label="Cash Balance" value={amount(data.cashBalance)} />
         </div>
       )}
 
@@ -120,7 +124,7 @@ export default function AccountingDashboardPage() {
 
         <ChartCard
           title="GST Summary"
-          subtitle="May 2026"
+          subtitle={companyToday().slice(0,7)}
           viewHref="/gst"
           className="lg:col-span-1"
           legend={data && <DonutLegend data={gstData} formatValue={(v) => formatINR(v, { compact: true })} />}
@@ -130,11 +134,11 @@ export default function AccountingDashboardPage() {
       </div>
 
       <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <ChartCard title="Cash / Bank Summary" subtitle="Last 6 months" viewHref="/banking" viewLabel="View Bank Reconciliation" className="lg:col-span-2">
-          {cashFlow.length === 0 ? <Skeleton className="h-full w-full" /> : <CashFlowLineChart data={cashFlow} />}
+        <ChartCard title="Bank / Cash Movements" subtitle="Last 6 months" viewHref="/banking" viewLabel="View Banking" className="lg:col-span-2">
+          {cashFlow.length === 0 ? <p className="text-sm text-muted-foreground">Configure bank or cash accounts to view posted movements.</p> : <CashFlowLineChart data={cashFlow} />}
         </ChartCard>
 
-        <SectionCard title="Payroll Accounting (May 2026)" actions={<Link href="/payroll-accounting" className="text-xs font-medium text-primary hover:underline">View →</Link>}>
+        <SectionCard title={"Payroll Accounting ("+companyToday().slice(0,7)+")"} actions={<Link href="/payroll-accounting" className="text-xs font-medium text-primary hover:underline">View →</Link>}>
           {!data ? (
             <div className="space-y-3">
               {Array.from({ length: 4 }).map((_, i) => (
@@ -148,19 +152,19 @@ export default function AccountingDashboardPage() {
             <div className="space-y-3">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Payroll Cost (MTD)</span>
-                <span className="font-medium text-foreground">{formatINR(data.payrollAccounting.payrollCost)}</span>
+                <span className="font-medium text-foreground">{amount(data.payrollAccounting.payrollCost)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Employer Contributions</span>
-                <span className="font-medium text-foreground">{formatINR(data.payrollAccounting.employerContribution)}</span>
+                <span className="font-medium text-foreground">{amount(data.payrollAccounting.employerContribution)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Total Payroll Cost</span>
-                <span className="font-semibold text-primary">{formatINR(data.payrollAccounting.totalPayrollCost)}</span>
+                <span className="font-semibold text-primary">{amount(data.payrollAccounting.totalPayrollCost)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Salary Liabilities</span>
-                <span className="font-medium text-foreground">{formatINR(data.payrollAccounting.salaryLiabilities)}</span>
+                <span className="font-medium text-foreground">{amount(data.payrollAccounting.salaryLiabilities)}</span>
               </div>
               <p className="text-xs text-muted-foreground">Payable to Employees</p>
             </div>

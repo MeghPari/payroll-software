@@ -1,0 +1,5 @@
+import { readFile,readdir,writeFile,rename } from 'node:fs/promises';
+const directory=new URL('../supabase/migrations/',import.meta.url),names=(await readdir(directory)).filter(name=>name.endsWith('.sql')&&name>='202610140036').sort(),parts=[];
+for(const name of names){const source=await readFile(new URL(name,directory),'utf8');if(!source.trim())throw new Error('Empty migration '+name);parts.push(`-- ${name}\n${source.replace(/^begin;\s*/i,'').replace(/commit;\s*$/i,'')}`);}
+const target=new URL('../supabase/upgrade-payroll-finance.sql',import.meta.url),temporary=new URL('../supabase/upgrade-payroll-finance.sql.codex-tmp',import.meta.url);
+await writeFile(temporary,`-- Apply ONCE after confirmed migrations 001-035.\n-- Additive prior-payroll corrections, reviewed cash flow, actual salary-payment dates exact proration rounding and verified session context.\n-- Existing published payroll and financial records are retained. No transfer or filing is initiated.\nbegin;\n${parts.join('\n')}\ncommit;\n`);await rename(temporary,target);console.log(`Packaged ${names.length} migrations into supabase/upgrade-payroll-finance.sql.`);

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { SectionCard } from "@/components/shared/section-card";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
+import { IdentityEditor } from '@/components/employees/identity-editor';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { updateEmployeeKYC } from "@/services/kyc.service";
 import type { Employee, EmployeeKYC, TaxRegime, VerificationStatus } from "@/types";
@@ -51,6 +51,8 @@ export function KYCPanel({ employee, kyc, onChanged }: KYCPanelProps) {
       await updateEmployeeKYC(employee.id, { [field]: value, overridden: true } as Partial<EmployeeKYC>);
       toast.success(`${label} updated`);
       onChanged();
+    } catch(error) {
+      toast.error(error instanceof Error?error.message:'Unable to update KYC.');
     } finally {
       setSaving(null);
     }
@@ -58,6 +60,7 @@ export function KYCPanel({ employee, kyc, onChanged }: KYCPanelProps) {
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <IdentityEditor key={employee.id+'-'+employee.version} employee={employee} onSaved={onChanged}/>
       <SectionCard title="Identity Details">
         <div className="space-y-4">
           <VerifiableField label="PAN Number" value={employee.statutory.pan} status={kyc.panStatus} onVerify={() => patch("panStatus", "Verified", "PAN status")} />
@@ -88,7 +91,7 @@ export function KYCPanel({ employee, kyc, onChanged }: KYCPanelProps) {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-foreground">PF Applicable</p>
-            <Switch checked={kyc.pfApplicable} disabled={saving === "pfApplicable"} onCheckedChange={(v) => patch("pfApplicable", v, "PF applicability")} />
+            <Applicability value={kyc.pfApplicable} configured={kyc.applicabilityConfigured?.pfApplicable} disabled={!!saving} onChange={v=>patch('pfApplicable',v,'PF applicability')}/>
           </div>
           <Field label="UAN Number" value={employee.statutory.uan || "—"} />
           <Field label="PF Account Number" value={employee.statutory.pfNumber || "—"} />
@@ -99,7 +102,7 @@ export function KYCPanel({ employee, kyc, onChanged }: KYCPanelProps) {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-foreground">ESI Applicable</p>
-            <Switch checked={kyc.esiApplicable} disabled={saving === "esiApplicable"} onCheckedChange={(v) => patch("esiApplicable", v, "ESI applicability")} />
+            <Applicability value={kyc.esiApplicable} configured={kyc.applicabilityConfigured?.esiApplicable} disabled={!!saving} onChange={v=>patch('esiApplicable',v,'ESI applicability')}/>
           </div>
           <Field label="ESIC Number" value={employee.statutory.esicNumber || "—"} />
         </div>
@@ -109,9 +112,9 @@ export function KYCPanel({ employee, kyc, onChanged }: KYCPanelProps) {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
           <div className="space-y-1.5">
             <p className="text-xs text-muted-foreground">Tax Regime</p>
-            <Select value={kyc.taxRegime} onValueChange={(v) => v && patch("taxRegime", v as TaxRegime, "Tax regime")}>
+            <Select value={kyc.taxRegimeConfigured?kyc.taxRegime:''} onValueChange={(v) => v && patch("taxRegime", v as TaxRegime, "Tax regime")}>
               <SelectTrigger className="w-full">
-                <SelectValue />
+                <SelectValue placeholder="Unconfigured" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="Old Regime">Old Regime</SelectItem>
@@ -122,7 +125,7 @@ export function KYCPanel({ employee, kyc, onChanged }: KYCPanelProps) {
           <Field label="PAN" value={employee.statutory.pan} />
           <div className="flex flex-col justify-between">
             <p className="text-xs text-muted-foreground">TDS Applicable</p>
-            <Switch className="mt-1.5" checked={kyc.tdsApplicable} disabled={saving === "tdsApplicable"} onCheckedChange={(v) => patch("tdsApplicable", v, "TDS applicability")} />
+            <Applicability value={kyc.tdsApplicable} configured={kyc.applicabilityConfigured?.tdsApplicable} disabled={!!saving} onChange={v=>patch('tdsApplicable',v,'TDS applicability')}/>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Declaration Status</p>
@@ -132,6 +135,10 @@ export function KYCPanel({ employee, kyc, onChanged }: KYCPanelProps) {
           </div>
         </div>
       </SectionCard>
+      <SectionCard title="Professional Tax"><Applicability value={kyc.ptApplicable} configured={kyc.applicabilityConfigured?.ptApplicable} disabled={!!saving} onChange={v=>patch('ptApplicable',v,'PT applicability')}/></SectionCard>
     </div>
   );
+}
+function Applicability({value,configured,disabled,onChange}:{value:boolean;configured?:boolean;disabled:boolean;onChange:(value:boolean)=>void}){
+ return <Select value={configured?String(value):''} disabled={disabled} onValueChange={value=>value&&onChange(value==='true')}><SelectTrigger aria-label="Statutory applicability"><SelectValue placeholder="Unconfigured"/></SelectTrigger><SelectContent><SelectItem value="true">Applicable</SelectItem><SelectItem value="false">Not applicable</SelectItem></SelectContent></Select>;
 }

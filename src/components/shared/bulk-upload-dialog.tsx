@@ -89,29 +89,27 @@ export function BulkUploadDialog<TRow>({
       setFile(selected);
       setParsing(true);
       try {
+        if(selected.size>2_000_000)throw new Error('CSV files must be under 2 MB.');
         const isCsv = /\.csv$/i.test(selected.name);
         let records: Record<string, string>[];
         if (isCsv) {
           const text = await readFileAsText(selected);
           records = parseCSV(text);
         } else {
-          // .xls / .xlsx: browser-side binary parsing needs a spreadsheet library.
-          // Simulated for this frontend demo using the same sample data as the template.
-          await new Promise((r) => setTimeout(r, 600));
-          records = sampleRows.map((row) => Object.fromEntries(templateColumns.map((col, i) => [col, String(row[i] ?? "")])));
+          throw new Error('Please export the spreadsheet as CSV. Binary spreadsheet imports are not supported yet.');
         }
         const parsedRows = records.map(parseRow);
         setRows(parsedRows);
         setStep("preview");
         const validated = await validateRows(parsedRows);
         setResults(validated);
-      } catch {
-        toast.error("Could not read the file", { description: "Please check the file format and try again." });
+      } catch(error) {
+        toast.error('Import validation failed', {description:error instanceof Error?error.message:'Please check the file format.'});
       } finally {
         setParsing(false);
       }
     },
-    [parseRow, sampleRows, templateColumns, validateRows]
+    [parseRow, validateRows]
   );
 
   function onDrop(e: React.DragEvent) {
@@ -129,7 +127,7 @@ export function BulkUploadDialog<TRow>({
       setUploadRecord(record);
       setStep("summary");
       toast.success("Import completed", { description: `${validRows.length} records imported successfully.` });
-    } finally {
+    } catch(error) {toast.error(error instanceof Error?error.message:'Import failed. No success is confirmed.');} finally {
       setImporting(false);
     }
   }
@@ -220,11 +218,11 @@ export function BulkUploadDialog<TRow>({
             >
               <UploadCloud className="h-8 w-8 text-primary" />
               <p className="text-sm font-medium text-foreground">Drag and drop your file here, or click to browse</p>
-              <p className="text-xs text-muted-foreground">Supports CSV, XLS, XLSX</p>
+                <p className="text-xs text-muted-foreground">Supports CSV. Export spreadsheets as CSV before uploading.</p>
               <input
                 ref={inputRef}
                 type="file"
-                accept=".csv,.xls,.xlsx"
+                  accept=".csv"
                 className="hidden"
                 onChange={(e) => {
                   const selected = e.target.files?.[0];

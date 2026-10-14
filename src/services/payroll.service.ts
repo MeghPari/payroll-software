@@ -1,161 +1,30 @@
-import { payrollRun as mockPayrollRun, payrollCostHistory } from "@/data/mock/payroll";
-import { salaryStructures as mockStructures } from "@/data/mock/salaryStructures";
-import { mockDelay } from "@/lib/async";
-import {
-  calculatePayrollForMonth,
-  calculatePayrollRow,
-  payrollExceptionCountsForMonth,
-  payrollExceptionsForMonth,
-  useOperations,
-  validatePayrollForMonth,
-} from "@/store/operations-store";
-import type {
-  PayrollCalculation,
-  PayrollEligibility,
-  PayrollException,
-  PayrollExceptionType,
-  PayrollPeriod,
-  PayrollRun,
-  PayrollStepStatus,
-  PayrollValidationIssue,
-  SalaryStructure,
-} from "@/types";
-
-const runState: PayrollRun = { ...mockPayrollRun, steps: mockPayrollRun.steps.map((s) => ({ ...s })) };
-const structureStore: SalaryStructure[] = [...mockStructures];
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function getPayroll(month: string = runState.month): Promise<PayrollRun> {
-  return mockDelay({ ...runState, month });
+import { getPayrollRun,payrollAction,type PayrollSnapshot,type PayrollChecks } from './payroll-run.service';
+import { companyToday } from '@/domain/dates';
+import { componentCodes } from './salary-structure.service';
+import type { PayrollCalculation,PayrollEligibility,PayrollException,PayrollExceptionType,PayrollPeriod,PayrollRun,PayrollStepStatus,SalaryProfile } from '@/types';
+export {getSalaryStructures,getSalaryStructureById,updateSalaryStructure,createSalaryStructure}from './salary-structure.service';
+export type PayrollValidationSummary=PayrollChecks & {issues:import('@/types').PayrollValidationIssue[]};
+function calculation(row:PayrollSnapshot,month:string):PayrollCalculation{
+ const snapshot=row.snapshot,earn=snapshot.earnings,ded=snapshot.deductions,cost=snapshot.employer;
+ const salary={employeeId:row.employee_id,effectiveFrom:snapshot.salary.effectiveFrom,structure:snapshot.salary.structure,...Object.fromEntries(componentCodes.map(code=>[code,(snapshot.salary.amounts[code]??0)/100]))}as SalaryProfile;
+ const d=(code:string)=>(ded[code]??0)/100,c=(code:string)=>(cost[code]??0)/100,e=(code:string)=>(earn[code]??0)/100;
+ return{earningsBreakdown:Object.fromEntries(Object.entries(earn).map(([code,value])=>[code,value/100])),deductionBreakdown:Object.fromEntries(Object.entries(ded).map(([code,value])=>[code,value/100])),employeeId:row.employee_id,month,salary,attendance:snapshot.attendance,grossEarnings:snapshot.baselineGrossMinor/100,basic:e('basic'),hra:e('hra'),allowances:e('special')+e('conveyance')+e('other'),variablePay:e('bonus')+e('variable'),lopDeduction:(snapshot.baselineGrossMinor-row.gross_minor)/100,adjustedGross:row.gross_minor/100,pf:d('pf'),esi:d('esi'),pt:d('pt'),tds:d('tds'),otherDeductions:d('loan')+d('advance')+d('otherDeduction'),totalDeductions:row.deduction_minor/100,netPayable:row.net_minor/100,employerPF:c('pf'),employerESI:c('esi'),employerOther:c('employerOther'),totalEmployerCost:(row.gross_minor+row.employer_minor)/100,eligibility:'Eligible',status:'Ready'};
 }
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function validatePayroll(): Promise<{ passed: boolean; alerts: PayrollRun["alerts"] }> {
-  return mockDelay({ passed: runState.validationPassed, alerts: runState.alerts }, 900);
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function calculatePayroll(): Promise<PayrollRun> {
-  return mockDelay({ ...runState }, 1200);
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function approvePayroll(): Promise<PayrollRun> {
-  runState.status = "approved";
-  runState.steps = runState.steps.map((s) =>
-    s.id <= 7 ? { ...s, status: "completed" as PayrollStepStatus } : s
-  );
-  return mockDelay({ ...runState }, 1400);
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function setStepStatus(stepId: number, status: PayrollStepStatus): Promise<PayrollRun> {
-  runState.steps = runState.steps.map((s) => (s.id === stepId ? { ...s, status } : s));
-  return mockDelay({ ...runState });
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function getPayrollCostHistory() {
-  return mockDelay(payrollCostHistory);
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function getSalaryStructures(): Promise<SalaryStructure[]> {
-  return mockDelay([...structureStore]);
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function getSalaryStructureById(id: string): Promise<SalaryStructure | undefined> {
-  return mockDelay(structureStore.find((s) => s.id === id));
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function updateSalaryStructure(id: string, data: Partial<SalaryStructure>): Promise<SalaryStructure | undefined> {
-  const index = structureStore.findIndex((s) => s.id === id);
-  if (index === -1) return mockDelay(undefined);
-  structureStore[index] = { ...structureStore[index], ...data };
-  return mockDelay(structureStore[index]);
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function createSalaryStructure(data: Omit<SalaryStructure, "id" | "employeeCount">): Promise<SalaryStructure> {
-  const newStructure: SalaryStructure = { ...data, id: `ss-${structureStore.length + 1}`, employeeCount: 0 };
-  structureStore.push(newStructure);
-  return mockDelay(newStructure);
-}
-
-// ---------------------------------------------------------------------------
-// Attendance-integrated payroll engine (Payroll Run, section 17–23)
-// ---------------------------------------------------------------------------
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function calculatePayrollPreview(employeeId: string, month: string): Promise<PayrollCalculation | undefined> {
-  return mockDelay(calculatePayrollRow(employeeId, month));
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function getPayrollReview(month: string): Promise<PayrollCalculation[]> {
-  return mockDelay(calculatePayrollForMonth(month), 1000);
-}
-
-export interface PayrollValidationSummary {
-  issues: PayrollValidationIssue[];
-  totalChecked: number;
-  passed: number;
-  warnings: number;
-  blockingErrors: number;
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function validatePayrollMonth(month: string): Promise<PayrollValidationSummary> {
-  const issues = validatePayrollForMonth(month);
-  const totalChecked = useOperations.getState().employees.length;
-  const warnings = issues.filter((i) => i.severity === "Warning").length;
-  const blockingErrors = issues.filter((i) => i.severity === "Blocking Error").length;
-  const passed = issues.filter((i) => i.severity === "Passed").length;
-  useOperations.getState().validatePeriod(month);
-  return mockDelay({ issues, totalChecked, passed, warnings, blockingErrors }, 1100);
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function getPayrollExceptions(month: string): Promise<PayrollException[]> {
-  return mockDelay(payrollExceptionsForMonth(month));
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function getPayrollExceptionCounts(month: string): Promise<Record<PayrollExceptionType, number>> {
-  return mockDelay(payrollExceptionCountsForMonth(month));
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function getPayrollEligibilityCounts(month: string): Promise<Record<PayrollEligibility, number>> {
-  const rows = calculatePayrollForMonth(month);
-  const counts = {} as Record<PayrollEligibility, number>;
-  rows.forEach((r) => {
-    counts[r.eligibility] = (counts[r.eligibility] ?? 0) + 1;
-  });
-  return mockDelay(counts);
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function getPayrollPeriod(month: string): Promise<PayrollPeriod> {
-  return mockDelay(useOperations.getState().ensurePeriod(month));
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function approvePayrollPeriod(month: string): Promise<PayrollPeriod> {
-  useOperations.getState().approvePeriod(month);
-  return mockDelay(useOperations.getState().periods[month], 1400);
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function lockPayrollPeriod(month: string): Promise<PayrollPeriod> {
-  useOperations.getState().lockPeriod(month);
-  return mockDelay(useOperations.getState().periods[month], 900);
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function unlockPayrollPeriod(month: string): Promise<PayrollPeriod> {
-  useOperations.getState().unlockPeriod(month);
-  return mockDelay(useOperations.getState().periods[month], 500);
-}
+export async function getPayrollReview(month:string){return(await getPayrollRun(month)).snapshots.map(row=>calculation(row,month));}
+export async function calculatePayrollPreview(employeeId:string,month:string){return(await getPayrollReview(month)).find(row=>row.employeeId===employeeId);}
+export function validatePayrollMonth(month:string){return payrollAction<PayrollValidationSummary>(month,'validate');}
+export async function recalculatePayrollMonth(month:string){await payrollAction(month,'calculate');return getPayrollReview(month);}
+export async function getPayrollPeriod(month:string):Promise<PayrollPeriod>{const data=await getPayrollRun(month),run=data.run;return{month,version:run?.version,status:run?.status==='Calculated'?'Processed':run?.status??'Draft',attendanceFinalized:data.attendanceFinalized,validated:!!run&&run.status!=='Draft',approved:run?.status==='Approved'||run?.status==='Locked',published:data.workflow?.published??false,disbursed:data.workflow?.disbursed??false,posted:data.workflow?.posted??false,lockedOn:run?.locked_at??undefined};}
+async function transition(month:string,action:'approve'|'lock'|'unlock',version?:number,reason=''){if(!version)throw new Error('Refresh payroll before changing its status.');await payrollAction(month,action,version,reason);return getPayrollPeriod(month);}
+export function approvePayrollPeriod(month:string,version?:number){return transition(month,'approve',version);}
+export function lockPayrollPeriod(month:string,version?:number){return transition(month,'lock',version);}
+export function unlockPayrollPeriod(month:string,version?:number,reason=''){return transition(month,'unlock',version,reason);}
+export async function getPayrollExceptions(month:string):Promise<PayrollException[]>{const allowed:PayrollExceptionType[]=['Missing Bank Details','Missing PAN','No Salary Assigned','Attendance Missing'];return(await validatePayrollMonth(month)).issues.filter(issue=>allowed.includes(issue.check as PayrollExceptionType)).map(issue=>({employeeId:issue.employeeId,type:issue.check as PayrollExceptionType,detail:issue.message}));}
+export async function getPayrollExceptionCounts(month:string){const counts={}as Record<PayrollExceptionType,number>;for(const issue of await getPayrollExceptions(month))counts[issue.type]=(counts[issue.type]??0)+1;return counts;}
+export async function getPayrollEligibilityCounts(month:string){const counts={}as Record<PayrollEligibility,number>;for(const row of await getPayrollReview(month))counts[row.eligibility]=(counts[row.eligibility]??0)+1;return counts;}
+export async function getPayroll(month=companyToday().slice(0,7)):Promise<PayrollRun>{const data=await getPayrollRun(month);return{id:data.run?.id??'',month,status:data.run?.status==='Locked'?'completed':data.run?.status==='Approved'?'approved':data.run?.status==='Calculated'?'ready':'draft',steps:[],alerts:[],totalEmployees:data.snapshots.length,grossPay:data.snapshots.reduce((sum,row)=>sum+row.gross_minor,0)/100,totalDeductions:data.snapshots.reduce((sum,row)=>sum+row.deduction_minor,0)/100,netPayable:data.snapshots.reduce((sum,row)=>sum+row.net_minor,0)/100,employerContribution:data.snapshots.reduce((sum,row)=>sum+row.employer_minor,0)/100,rows:data.snapshots.map(row=>({employeeId:row.employee_id,employeeCode:row.snapshot.employeeCode,employeeName:row.snapshot.employeeName,department:'',grossSalary:row.gross_minor/100,pf:(row.snapshot.deductions.pf??0)/100,esi:(row.snapshot.deductions.esi??0)/100,pt:(row.snapshot.deductions.pt??0)/100,tds:(row.snapshot.deductions.tds??0)/100,otherDeductions:['loan','advance','otherDeduction'].reduce((sum,code)=>sum+(row.snapshot.deductions[code]??0),0)/100,netPay:row.net_minor/100,status:'Ready'})),validationPassed:!!data.run&&data.run.status!=='Draft'};}
+export async function validatePayroll(){const checks=await validatePayrollMonth(companyToday().slice(0,7));return{passed:!checks.blockingErrors,alerts:checks.issues.map((issue,index)=>({id:String(index),severity:'critical'as const,message:issue.message}))};}
+export async function calculatePayroll(){const month=companyToday().slice(0,7);await recalculatePayrollMonth(month);return getPayroll(month);}
+export async function approvePayroll(){const month=companyToday().slice(0,7),period=await getPayrollPeriod(month);await approvePayrollPeriod(month,period.version);return getPayroll(month);}
+export async function setStepStatus(stepId:number,status:PayrollStepStatus):Promise<PayrollRun>{void stepId;void status;throw new Error('Workflow steps are derived from persisted records.');}
+export async function getPayrollCostHistory(){throw new Error('Payroll cost history needs the reporting endpoint.');}

@@ -1,0 +1,20 @@
+import { readFile,writeFile,mkdir } from 'node:fs/promises';import ts from 'typescript';import assert from 'node:assert/strict';import { PDFDocument } from 'pdf-lib';
+const output=new URL('../.test-output/',import.meta.url);await mkdir(output,{recursive:true});
+const source=await readFile(new URL('../src/server/payslip-pdf.ts',import.meta.url),'utf8');
+const compiled=ts.transpileModule(source.replace("import 'server-only';",''),{compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.ESNext}}).outputText;
+await writeFile(new URL('payslip-pdf.mjs',output),compiled);
+const{payslipPdf}=await import(new URL('payslip-pdf.mjs',output).href);
+const content={companyName:'Fixture company',employeeName:'परीक्षण कर्मचारी',employeeCode:'FIXTURE',month:'2026-10-01',calendarDays:31,paidDays:31,grossMinor:100000,deductionMinor:1000,netMinor:99000,earnings:{basic:100000},deductions:{loan:1000},employer:{}};
+const pdf=await payslipPdf(content,'00000000-0000-4000-8000-000000000001','Draft','2026-10-09T00:00:00Z');
+assert.equal((await PDFDocument.load(pdf)).getPageCount(),1);
+await writeFile(new URL('fixture-payslip.pdf',output),pdf);
+const long=await payslipPdf({...content,companyName:'A'.repeat(600)},'fixture','Draft','2026-10-09T00:00:00Z');assert.ok((await PDFDocument.load(long)).getPageCount()>=1);
+console.log('PASS payslip PDF generation, Devanagari font embedding and long-line wrapping. Visual PDF verification remains separate.');
+
+const textSource=await readFile(new URL('../src/server/text-pdf.ts',import.meta.url),'utf8');
+await writeFile(new URL('text-pdf.mjs',output),ts.transpileModule(textSource.replace("import 'server-only';",''),{compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.ESNext}}).outputText);
+const {textPdf}=await import(new URL('text-pdf.mjs',output).href);
+const invoice=await textPdf('Invoice fixture',[{text:content.employeeName,size:17},...Array.from({length:80},(_,i)=>({text:'Item '+i+' INR 100.01'}))]);
+assert.ok((await PDFDocument.load(invoice)).getPageCount()>1);await writeFile(new URL('fixture-invoice.pdf',output),invoice);
+await assert.rejects(textPdf('Unsupported',[{text:String.fromCodePoint(0x1f680)}]),/DOCUMENT_FONT_UNSUPPORTED/);
+console.log('PASS invoice PDF pagination, embedded font and unsupported-character rejection.');

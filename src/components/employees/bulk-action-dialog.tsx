@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -28,7 +29,7 @@ export function BulkActionDialog({ open, onOpenChange, title, description, field
     try {
       await onApply(value);
       onOpenChange(false);
-    } finally {
+    } catch(error) { toast.error(error instanceof Error?error.message:'Bulk update failed.'); } finally {
       setSubmitting(false);
     }
   }

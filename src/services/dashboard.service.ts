@@ -1,15 +1,3 @@
-import { dashboardKpis, payrollSummary, accountsSummary, pendingActions, payrollCostHistory, cashFlowHistory, topExpenses } from "@/data/mock/dashboard";
-import { mockDelay } from "@/lib/async";
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function getDashboardOverview() {
-  return mockDelay({
-    kpis: dashboardKpis,
-    payrollSummary,
-    accountsSummary,
-    pendingActions,
-    payrollCostHistory,
-    cashFlowHistory,
-    topExpenses,
-  });
-}
+import { tenantApi } from '@/lib/tenant-api';
+import type { DashboardOverview } from '@/domain/dashboard';
+export function getDashboardOverview(){return tenantApi<DashboardOverview>('dashboard');}

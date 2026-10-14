@@ -35,7 +35,7 @@ export function SalaryHoldDialog({ employeeId, employeeName, defaultMonth, open,
       toast.success(`Salary put on hold for ${employeeName}`, { description: `${month} · ${reason}` });
       onDone();
       onOpenChange(false);
-    } finally {
+    } catch(error) {toast.error(error instanceof Error?error.message:'Unable to save salary hold.');} finally {
       setSubmitting(false);
     }
   }
@@ -121,7 +121,7 @@ export function ReleaseSalaryDialog({ employeeId, employeeName, month, open, onO
       toast.success(`Salary released for ${employeeName}`);
       onDone();
       onOpenChange(false);
-    } finally {
+    } catch(error) {toast.error(error instanceof Error?error.message:'Unable to release salary hold.');} finally {
       setSubmitting(false);
     }
   }

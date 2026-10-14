@@ -32,20 +32,14 @@ import { DonutChart, DonutLegend } from "@/components/shared/charts/donut-chart"
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getDashboardOverview } from "@/services/dashboard.service";
-import { getTodayAttendanceSummary, type TodayAttendanceCounts } from "@/services/attendance.service";
-import { getPayrollExceptionCounts, getPayrollEligibilityCounts } from "@/services/payroll.service";
-import { CURRENT_PAYROLL_MONTH_KEY } from "@/data/mock/attendance";
+import { useSessionStore } from '@/store/session-store';
 import { formatINR } from "@/utils/format";
 import Link from "next/link";
 
 type Overview = Awaited<ReturnType<typeof getDashboardOverview>>;
 
-interface OpsSnapshot {
-  today: TodayAttendanceCounts;
-  exceptionCount: number;
-  eligible: number;
-  total: number;
-}
+type OpsSnapshot=Overview['ops'];
+const amount=(value:number|null)=>value===null?'Not available':formatINR(value);
 
 const expenseColors = ["#1769E0", "#22A06B", "#D99823", "#7C5CFC", "#DC4C64", "#94A3B8"];
 
@@ -58,29 +52,26 @@ const pendingActionIcons: Record<string, typeof CalendarClock> = {
 };
 
 export default function DashboardPage() {
+  const companyId=useSessionStore(state=>state.companyId);
+  return <DashboardContent key={companyId} />;
+}
+
+function DashboardContent() {
+  const companyId=useSessionStore(state=>state.companyId);
   const [data, setData] = useState<Overview | null>(null);
   const [ops, setOps] = useState<OpsSnapshot | null>(null);
+  const [error,setError]=useState('');
 
   useEffect(() => {
-    getDashboardOverview().then(setData);
-    Promise.all([
-      getTodayAttendanceSummary(),
-      getPayrollExceptionCounts(CURRENT_PAYROLL_MONTH_KEY),
-      getPayrollEligibilityCounts(CURRENT_PAYROLL_MONTH_KEY),
-    ]).then(([today, exceptions, eligibility]) => {
-      const total = Object.values(eligibility).reduce((s, c) => s + c, 0);
-      setOps({
-        today,
-        exceptionCount: Object.values(exceptions).reduce((s, c) => s + c, 0),
-        eligible: eligibility.Eligible ?? 0,
-        total,
-      });
-    });
-  }, []);
+    let cancelled=false;
+    getDashboardOverview().then(overview=>{if(!cancelled){setData(overview);setOps(overview.ops);setError('');}}).catch(error=>{if(!cancelled)setError(error instanceof Error?error.message:'Unable to load the dashboard.');});
+    return()=>{cancelled=true;};
+  }, [companyId]);
 
   const { kpis, payrollSummary, accountsSummary, pendingActions, payrollCostHistory, cashFlowHistory, topExpenses } =
     data ?? ({} as Partial<Overview>);
-  const readinessPercent = ops && ops.total ? Math.round((ops.eligible / ops.total) * 100) : 0;
+  const readinessPercent = ops?.total && ops.eligible!==null ? Math.round((ops.eligible / ops.total) * 100) : 0;
+  if(error)return <div><PageHeader title="Company Dashboard" subtitle="Unable to load this company’s dashboard." /><p role="alert" className="rounded-xl border p-4 text-sm text-danger">{error}</p></div>;
 
   return (
     <div>
@@ -97,7 +88,7 @@ export default function DashboardPage() {
             value={String(kpis!.totalEmployees)}
             helperText={`${kpis!.newThisMonth} new this month`}
           />
-          <StatCard icon={Wallet} tone="green" label="Net Salary Payable" value={formatINR(kpis!.netSalaryPayable)} />
+          <StatCard icon={Wallet} tone="green" label="Net Salary Payable" value={amount(kpis!.netSalaryPayable)} />
           <StatCard
             icon={CheckCircle2}
             tone="purple"
@@ -119,20 +110,16 @@ export default function DashboardPage() {
             icon={TrendingUp}
             tone="cyan"
             label="Revenue"
-            value={formatINR(kpis!.revenue)}
-            changeLabel="12.6%"
-            changeDirection="up"
+            value={amount(kpis!.revenue)}
           />
           <StatCard
             icon={TrendingDown}
             tone="red"
             label="Expenses"
-            value={formatINR(kpis!.expenses)}
-            changeLabel="8.3%"
-            changeDirection="down"
+            value={amount(kpis!.expenses)}
           />
-          <StatCard icon={Percent} tone="amber" label="GST Payable" value={formatINR(kpis!.gstPayable)} helperText="Due on 20 May 2026" />
-          <StatCard icon={Landmark} tone="blue" label="Bank Balance" value={formatINR(kpis!.bankBalance)} />
+          <StatCard icon={Percent} tone="amber" label="GST Payable" value={amount(kpis!.gstPayable)} helperText="GST reporting awaits integration" />
+          <StatCard icon={Landmark} tone="blue" label="Bank Balance" value={amount(kpis!.bankBalance)} helperText="Bank records await integration" />
         </div>
       )}
 
@@ -161,7 +148,7 @@ export default function DashboardPage() {
               <div className="flex items-center gap-3 rounded-lg bg-rose-50 px-3 py-3 ring-1 ring-inset ring-rose-200">
                 <ShieldAlert className="h-5 w-5 shrink-0 text-danger" />
                 <div>
-                  <p className="text-lg font-semibold text-danger">{ops.exceptionCount}</p>
+                  <p className="text-lg font-semibold text-danger">{ops.exceptionCount??'No access'}</p>
                   <p className="text-xs text-foreground/70">Issues need attention before payroll can be finalized</p>
                 </div>
               </div>
@@ -180,12 +167,12 @@ export default function DashboardPage() {
               <div className="flex items-baseline justify-between">
                 <span className="text-sm text-muted-foreground">Payroll Ready</span>
                 <span className="text-sm font-semibold text-foreground">
-                  {ops.eligible} / {ops.total} Employees
+                  {ops.eligible===null?'No access':`${ops.eligible} / ${ops.total} Employees`}
                 </span>
               </div>
               <Progress value={readinessPercent} className="h-2" />
               <p className="text-xs text-muted-foreground">
-                {readinessPercent}% ready · {ops.total - ops.eligible} employee(s) require attention
+                {ops.total===null||ops.eligible===null?'Payroll validation requires payroll access.':`${readinessPercent}% ready · ${ops.total-ops.eligible} employee(s) require attention`}
               </p>
               <Link href="/payroll" className="inline-block text-xs font-medium text-primary hover:underline">
                 Go to Payroll Run →
@@ -201,10 +188,10 @@ export default function DashboardPage() {
             <SummarySkeleton rows={5} />
           ) : (
             <div className="space-y-3">
-              <SummaryRow label="Gross Salary" value={formatINR(payrollSummary!.grossSalary)} />
-              <SummaryRow label="Deductions" value={formatINR(payrollSummary!.deductions)} />
-              <SummaryRow label="Net Salary Payable" value={formatINR(payrollSummary!.netSalaryPayable)} emphasis />
-              <SummaryRow label="Disbursed to Date" value={formatINR(payrollSummary!.disbursedToDate)} />
+              <SummaryRow label="Gross Salary" value={amount(payrollSummary!.grossSalary)} />
+              <SummaryRow label="Deductions" value={amount(payrollSummary!.deductions)} />
+              <SummaryRow label="Net Salary Payable" value={amount(payrollSummary!.netSalaryPayable)} emphasis />
+              <SummaryRow label="Disbursed to Date" value={amount(payrollSummary!.disbursedToDate)} />
               <div className="flex items-center justify-between pt-1">
                 <span className="text-sm text-muted-foreground">Disbursement Status</span>
                 <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-success ring-1 ring-inset ring-emerald-200">
@@ -223,12 +210,12 @@ export default function DashboardPage() {
             <SummarySkeleton rows={6} />
           ) : (
             <div className="space-y-3">
-              <SummaryRow label="Revenue" value={formatINR(accountsSummary!.revenue)} />
-              <SummaryRow label="Expenses" value={formatINR(accountsSummary!.expenses)} />
-              <SummaryRow label="Profit Before Tax" value={formatINR(accountsSummary!.profitBeforeTax)} emphasis />
-              <SummaryRow label="GST Payable" value={formatINR(accountsSummary!.gstPayable)} />
-              <SummaryRow label="Outstanding Receivables" value={formatINR(accountsSummary!.outstandingReceivables)} />
-              <SummaryRow label="Payables to Vendors" value={formatINR(accountsSummary!.payablesToVendors)} />
+              <SummaryRow label="Revenue" value={amount(accountsSummary!.revenue)} />
+              <SummaryRow label="Expenses" value={amount(accountsSummary!.expenses)} />
+              <SummaryRow label="Profit Before Tax" value={amount(accountsSummary!.profitBeforeTax)} emphasis />
+              <SummaryRow label="GST Payable" value={amount(accountsSummary!.gstPayable)} />
+              <SummaryRow label="Outstanding Receivables" value={amount(accountsSummary!.outstandingReceivables)} />
+              <SummaryRow label="Payables to Vendors" value={amount(accountsSummary!.payablesToVendors)} />
               <Link href="/accounting" className="inline-block pt-1 text-xs font-medium text-primary hover:underline">
                 View Accounting Dashboard →
               </Link>
@@ -264,10 +251,10 @@ export default function DashboardPage() {
 
       <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
         <ChartCard title="Monthly Payroll Cost (₹)" subtitle="Last 6 months" viewHref="/payroll-reports" className="lg:col-span-1">
-          {!data ? <Skeleton className="h-full w-full" /> : <PayrollBarChart data={payrollCostHistory!} />}
+          {!data ? <Skeleton className="h-full w-full" /> : payrollCostHistory!.length ? <PayrollBarChart data={payrollCostHistory!} /> : <p className="text-sm text-muted-foreground">No calculated payroll runs yet.</p>}
         </ChartCard>
         <ChartCard title="Cash Flow (₹)" subtitle="Last 6 months" viewHref="/financial-reports" className="lg:col-span-1">
-          {!data ? <Skeleton className="h-full w-full" /> : <CashFlowLineChart data={cashFlowHistory!} />}
+          {!data ? <Skeleton className="h-full w-full" /> : cashFlowHistory!.length ? <CashFlowLineChart data={cashFlowHistory!} /> : <p className="text-sm text-muted-foreground">Cash flow requires configured bank and cash records.</p>}
         </ChartCard>
         <ChartCard
           title="Top Expenses"
@@ -298,11 +285,11 @@ export default function DashboardPage() {
   );
 }
 
-function MiniMetric({ icon: Icon, tone, label, value }: { icon: typeof UserCheck; tone: string; label: string; value: number }) {
+function MiniMetric({ icon: Icon, tone, label, value }: { icon: typeof UserCheck; tone: string; label: string; value: number|null }) {
   return (
     <div className="rounded-lg border border-border bg-muted/20 px-3 py-2.5">
       <Icon className={`h-4 w-4 ${tone}`} />
-      <p className="mt-1.5 text-lg font-semibold text-foreground">{value}</p>
+      <p className="mt-1.5 text-lg font-semibold text-foreground">{value??'Not configured'}</p>
       <p className="text-[11px] text-muted-foreground">{label}</p>
     </div>
   );

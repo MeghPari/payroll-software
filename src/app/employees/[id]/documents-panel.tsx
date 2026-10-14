@@ -1,86 +1,19 @@
-"use client";
-
-import { useRef, useState } from "react";
-import { SectionCard } from "@/components/shared/section-card";
-import { StatusBadge } from "@/components/shared/status-badge";
-import { Button } from "@/components/ui/button";
-import { uploadKYCDocument, verifyKYCDocument } from "@/services/kyc.service";
-import type { Employee, EmployeeKYC, KYCDocumentName } from "@/types";
-import { toast } from "sonner";
-import { FileText, Upload, CheckCircle2 } from "lucide-react";
-
-interface DocumentsPanelProps {
-  employee: Employee;
-  kyc: EmployeeKYC;
-  onChanged: () => void;
-}
-
-export function DocumentsPanel({ employee, kyc, onChanged }: DocumentsPanelProps) {
-  const [busy, setBusy] = useState<string | null>(null);
-  const fileInputs = useRef<Record<string, HTMLInputElement | null>>({});
-
-  async function handleUpload(docName: KYCDocumentName, file: File) {
-    setBusy(docName);
-    try {
-      await uploadKYCDocument(employee.id, docName, file.name);
-      toast.success(`${docName} uploaded`, { description: "Pending verification." });
-      onChanged();
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function handleVerify(docName: KYCDocumentName) {
-    setBusy(docName);
-    try {
-      await verifyKYCDocument(employee.id, docName);
-      toast.success(`${docName} verified`);
-      onChanged();
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  return (
-    <SectionCard title="Documents" subtitle="Identity, bank and onboarding documents for this employee." noPadding>
-      <div className="divide-y divide-border">
-        {kyc.documents.map((doc) => (
-          <div key={doc.name} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-primary">
-                <FileText className="h-4 w-4" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-foreground">{doc.name}</p>
-                <p className="text-xs text-muted-foreground">{doc.fileName || "No file uploaded"}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <StatusBadge status={doc.status} />
-              <input
-                ref={(el) => {
-                  fileInputs.current[doc.name] = el;
-                }}
-                type="file"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) handleUpload(doc.name, file);
-                  e.target.value = "";
-                }}
-              />
-              <Button variant="outline" size="sm" className="gap-1.5" disabled={busy === doc.name} onClick={() => fileInputs.current[doc.name]?.click()}>
-                <Upload className="h-3.5 w-3.5" /> Upload
-              </Button>
-              {doc.status !== "Verified" && doc.fileName && (
-                <Button variant="outline" size="sm" className="gap-1.5 text-success border-emerald-200 hover:bg-emerald-50" disabled={busy === doc.name} onClick={() => handleVerify(doc.name)}>
-                  <CheckCircle2 className="h-3.5 w-3.5" /> Verify
-                </Button>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-    </SectionCard>
-  );
+'use client';
+import { useEffect,useRef,useState } from 'react';
+import { SectionCard } from '@/components/shared/section-card';
+import { StatusBadge } from '@/components/shared/status-badge';
+import { Button } from '@/components/ui/button';
+import { DOCUMENT_TYPES,type EmployeeDocument } from '@/domain/documents';
+import { getEmployeeDocuments,uploadDocument,reviewDocument,downloadDocument } from '@/services/documents.service';
+import type { Employee } from '@/types';
+import { permitted } from '@/lib/tenant-api';
+import { toast } from 'sonner';
+import { FileText,Upload,Download } from 'lucide-react';
+export function DocumentsPanel({employee}:{employee:Employee}){
+ const[rows,setRows]=useState<EmployeeDocument[]>([]),[error,setError]=useState(''),[busy,setBusy]=useState(false),[revision,setRevision]=useState(0),[loading,setLoading]=useState(true);
+ const inputs=useRef<Record<string,HTMLInputElement|null>>({});
+ useEffect(()=>{let cancelled=false;getEmployeeDocuments(employee.id).then(rows=>{if(!cancelled){setRows(rows);setError('');}}).catch(error=>{if(!cancelled)setError(error instanceof Error?error.message:'Unable to load documents.');}).finally(()=>{if(!cancelled)setLoading(false);});return()=>{cancelled=true;};},[employee.id,revision]);
+ async function upload(type:typeof DOCUMENT_TYPES[number],file:File){setBusy(true);try{await uploadDocument(employee.id,type,file);toast.success('Document uploaded for review');setRevision(value=>value+1);}catch(error){toast.error(error instanceof Error?error.message:'Upload failed.');}finally{setBusy(false);}}
+ async function review(doc:EmployeeDocument,status:'Verified'|'Rejected'|'Removed'){const reason=window.prompt(status==='Verified'?'Record what you reviewed before verifying this document.':status==='Rejected'?'Why is this document rejected?':'Reason for removing this document:');if(!reason?.trim())return;setBusy(true);try{const response=await reviewDocument(doc,status,reason);if(response.cleanupPending)toast.warning('Document access removed; stored-file cleanup is pending.');else toast.success('Document review saved');setRevision(value=>value+1);}catch(error){toast.error(error instanceof Error?error.message:'Review failed.');}finally{setBusy(false);}}
+ return <SectionCard title="Documents" subtitle="Private PDF, PNG or JPEG files, up to 10 MB. Upload only documents needed for employment. Verification does not update bank or PAN verification." noPadding>{error&&<p role="alert" className="p-5 text-destructive">{error}</p>}{loading&&<p className="p-5 text-muted-foreground">Loading documents...</p>}<div className="divide-y divide-border">{DOCUMENT_TYPES.map(type=><div key={type} className="flex items-center justify-between px-5 py-4"><div className="flex items-center gap-3"><FileText className="h-4 w-4 text-primary"/><span className="text-sm font-medium">{type}</span></div>{permitted('employees.sensitive')&&<><input ref={element=>{inputs.current[type]=element;}} type="file" accept="application/pdf,image/png,image/jpeg" className="hidden" onChange={event=>{const file=event.target.files?.[0];if(file)void upload(type,file);event.target.value='';}}/><Button variant="outline" size="sm" disabled={busy} onClick={()=>inputs.current[type]?.click()}><Upload className="mr-1 h-4 w-4"/>Upload</Button></>}</div>)}{rows.map(doc=><div key={doc.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4"><div><p className="text-sm font-medium">{doc.document_type}: {doc.original_name}</p><p className="text-xs text-muted-foreground">{new Date(doc.uploaded_at).toLocaleDateString('en-IN')} ? {Math.ceil(doc.byte_size/1024)} KB</p>{doc.review_reason&&<p className="mt-1 text-xs text-muted-foreground">{doc.review_reason}</p>}</div><div className="flex flex-wrap items-center gap-2"><StatusBadge status={doc.status}/>{!['Removed','Uploading'].includes(doc.status)&&<Button variant="outline" size="sm" disabled={busy} onClick={()=>downloadDocument(doc).catch(error=>toast.error(error instanceof Error?error.message:'Download failed.'))}><Download className="mr-1 h-4 w-4"/>Download</Button>}{permitted('employees.sensitive')&&doc.status!=='Removed'&&<>{doc.status!=='Uploading'&&<><Button variant="outline" size="sm" disabled={busy} onClick={()=>void review(doc,'Verified')}>Verify</Button><Button variant="outline" size="sm" disabled={busy} onClick={()=>void review(doc,'Rejected')}>Reject</Button></>}<Button variant="outline" size="sm" disabled={busy} onClick={()=>void review(doc,'Removed')}>Remove</Button></>}</div></div>)}</div></SectionCard>;
 }

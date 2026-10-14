@@ -1,0 +1,20 @@
+begin;
+insert into auth.users(id,email,email_confirmed_at)values('40000000-0000-4000-8000-000000000001','accounting@example.invalid',now());insert into public.user_profiles(id)values('40000000-0000-4000-8000-000000000001');insert into public.companies(id,name)values('40000000-0000-4000-8000-000000000011','Accounting fixture');insert into public.user_company_roles(company_id,user_id,role)values('40000000-0000-4000-8000-000000000011','40000000-0000-4000-8000-000000000001','Super Admin');
+set local role authenticated;select set_config('request.jwt.claim.sub','40000000-0000-4000-8000-000000000001',true);
+do $$declare c uuid:='40000000-0000-4000-8000-000000000011';g uuid;a uuid;b uuid;j uuid;bad uuid;begin
+ g:=public.save_account(c,'{"kind":"group","name":"Fixture assets","type":"Asset"}');a:=public.save_account(c,jsonb_build_object('kind','ledger','groupId',g,'name','Fixture cash','code','CASH'));b:=public.save_account(c,jsonb_build_object('kind','ledger','groupId',g,'name','Fixture bank','code','BANK'));
+ j:=public.create_journal(c,jsonb_build_object('voucherNumber','TEST-1','date','2026-10-01','type','Contra','narration','Fixture transfer','lines',jsonb_build_array(jsonb_build_object('accountId',a,'debitMinor',10000),jsonb_build_object('accountId',b,'creditMinor',10000))));
+ begin perform public.post_journal(c,j,1);raise exception 'FAIL journal posted without year';exception when check_violation then null;end;
+ perform public.configure_financial_year(c,'2026-04-01','2027-03-31');
+ begin perform public.configure_financial_year(c,'2026-10-01','2027-10-01');raise exception 'FAIL overlapping year';exception when check_violation then null;end;
+ perform public.post_journal(c,j,1);
+ if(select balance_minor from public.account_balances(c)where account_id=a)<>10000 then raise exception 'FAIL ledger balance';end if;
+ begin perform public.post_journal(c,j,2);raise exception 'FAIL duplicate journal posting';exception when check_violation then null;end;
+ bad:=public.create_journal(c,jsonb_build_object('voucherNumber','TEST-BAD','date','2026-10-01','type','Journal','narration','Unbalanced fixture','lines',jsonb_build_array(jsonb_build_object('accountId',a,'debitMinor',10000),jsonb_build_object('accountId',b,'creditMinor',9999))));
+ begin perform public.post_journal(c,bad,1);raise exception 'FAIL unbalanced posted';exception when check_violation then null;end;
+ if(select status from public.journal_entries where company_id=c and id=bad)<>'Draft'then raise exception 'FAIL unbalanced rollback';end if;
+ perform public.reverse_journal(c,j,'2026-10-02','Fixture correction');
+ if(select balance_minor from public.account_balances(c)where account_id=a)<>0 then raise exception 'FAIL reversal balance';end if;
+ begin perform public.reverse_journal(c,j,'2026-10-02','Duplicate fixture');raise exception 'FAIL duplicate reversal';exception when check_violation then null;end;
+end $$;
+rollback;

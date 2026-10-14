@@ -1,279 +1,94 @@
-import { mockDelay } from "@/lib/async";
-import { useOperations, checkDuplicateUAN as checkDuplicateUANInStore } from "@/store/operations-store";
-import type { Employee, EmployeeFilters, EmploymentStatus, ExitRecord, ImportRowResult, ImportRowStatus, UploadRecord } from "@/types";
+import { tenantApi } from '@/lib/tenant-api';
+import { employeeView, type EmployeeRow } from '@/domain/employee-view';
+import type { Employee, EmployeeFilters, EmploymentStatus, ExitRecord, ImportRowResult, UploadRecord, StatusChangeRecord } from '@/types';
 
-function pad(n: number, len = 4): string {
-  return String(n).padStart(len, "0");
+export type EmployeeCreate = Pick<Employee,'firstName'|'lastName'|'email'|'phone'|'department'|'designation'|'joiningDate'|'workLocation'|'state'|'employmentType'> & Partial<Employee>;
+function input(data: EmployeeCreate) {
+  return { firstName:data.firstName,lastName:data.lastName,email:data.email,phone:data.phone,department:data.department,designation:data.designation,joiningDate:data.joiningDate,workLocation:data.workLocation,state:data.state,employmentType:data.employmentType,category:data.category,employeeCode:data.employeeCode,
+    ...(data.bankDetails ? {bankDetails:data.bankDetails} : {}), ...(data.statutory ? {statutory:{pan:data.statutory.pan,uan:data.statutory.uan,esicNumber:data.statutory.esicNumber}} : {}) };
 }
-
-function nextEmployeeId(): { id: string; employeeCode: string } {
-  const count = useOperations.getState().employees.length;
-  const n = count + 1;
-  return { id: `emp-imported-${Date.now()}-${n}`, employeeCode: `EMP${pad(n)}` };
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
 export async function getEmployees(filters: EmployeeFilters = {}): Promise<Employee[]> {
-  let results = [...useOperations.getState().employees];
-
-  if (filters.search) {
-    const q = filters.search.toLowerCase();
-    results = results.filter(
-      (e) => e.fullName.toLowerCase().includes(q) || e.employeeCode.toLowerCase().includes(q) || e.email.toLowerCase().includes(q)
-    );
+  const all: Employee[]=[];
+  for (let page=1;;page++) {
+    const response=await tenantApi<{items:EmployeeRow[];total:number}>(`employees?page=${page}&pageSize=100`);
+    all.push(...response.items.map(employeeView));
+    if (all.length>=response.total || !response.items.length) break;
   }
-  if (filters.department && filters.department !== "All") results = results.filter((e) => e.department === filters.department);
-  if (filters.designation && filters.designation !== "All") results = results.filter((e) => e.designation === filters.designation);
-  if (filters.location && filters.location !== "All") results = results.filter((e) => e.workLocation === filters.location);
-  if (filters.state && filters.state !== "All") results = results.filter((e) => e.state === filters.state);
-  if (filters.status && filters.status !== "All") results = results.filter((e) => e.status === filters.status);
-  if (filters.category && filters.category !== "All") results = results.filter((e) => (e.category ?? "Permanent") === filters.category);
-
-  return mockDelay(results);
+  return all.filter(e => (!filters.search || `${e.fullName} ${e.employeeCode} ${e.email}`.toLowerCase().includes(filters.search.toLowerCase())) &&
+    (!filters.department || filters.department==='All' || e.department===filters.department) &&
+    (!filters.designation || filters.designation==='All' || e.designation===filters.designation) &&
+    (!filters.location || filters.location==='All' || e.workLocation===filters.location) &&
+    (!filters.state || filters.state==='All' || e.state===filters.state) &&
+    (!filters.status || filters.status==='All' || e.status===filters.status) &&
+    (!filters.category || filters.category==='All' || e.category===filters.category));
 }
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function getEmployeeById(id: string): Promise<Employee | undefined> {
-  return mockDelay(useOperations.getState().employees.find((e) => e.id === id));
+interface Detail {
+ canReadDocuments:boolean;
+ employee:EmployeeRow; bank:{account_holder_name:string;account_number:string;ifsc_code:string;bank_name:string;branch:string}|null;
+ statutory:{pan:string|null;uan:string|null;esic_number:string|null}|null;
+ personal:{personal_email:string;date_of_birth:string|null;gender:Employee['gender'];address:string;city:string;pincode:string;emergency_contact:Employee['emergencyContact'];blood_group:string;marital_status:Employee['maritalStatus'];nationality:string;languages:string[]}|null;
+ history:{id:string;employee_id:string;previous_status:EmploymentStatus;new_status:EmploymentStatus;effective_date:string;reason:string;remarks:string;changed_by:string;created_at:string}[];
 }
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function createEmployee(data: Omit<Employee, "id" | "employeeCode" | "fullName">): Promise<Employee> {
-  const { id, employeeCode } = nextEmployeeId();
-  const newEmployee: Employee = { ...data, id, employeeCode, fullName: `${data.firstName} ${data.lastName}` };
-  useOperations.getState().addEmployee(newEmployee);
-  return mockDelay(newEmployee, 700);
+async function detail(id:string) { return tenantApi<Detail>(`employees/detail?id=${encodeURIComponent(id)}`); }
+export async function getEmployeeById(id:string):Promise<Employee|undefined> {
+ const data=await detail(id), employee=employeeView(data.employee);
+ employee.canReadDocuments=data.canReadDocuments;
+ if(data.bank) employee.bankDetails={accountHolderName:data.bank.account_holder_name,accountNumber:data.bank.account_number,ifscCode:data.bank.ifsc_code,bankName:data.bank.bank_name,branch:data.bank.branch};
+ if(data.statutory) employee.statutory={pan:data.statutory.pan??'',aadhaar:'',uan:data.statutory.uan??undefined,esicNumber:data.statutory.esic_number??undefined};
+ if(data.personal) Object.assign(employee,{bloodGroup:data.personal.blood_group??'',maritalStatus:data.personal.marital_status??'',nationality:data.personal.nationality??'',languages:data.personal.languages??[],personalEmail:data.personal.personal_email,dateOfBirth:data.personal.date_of_birth??'',gender:data.personal.gender??'',address:data.personal.address,city:data.personal.city,pincode:data.personal.pincode,emergencyContact:{...employee.emergencyContact,...data.personal.emergency_contact}});
+ return employee;
 }
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function updateEmployee(id: string, data: Partial<Employee>): Promise<Employee | undefined> {
-  useOperations.getState().updateEmployeeRecord(id, data);
-  return mockDelay(useOperations.getState().employees.find((e) => e.id === id));
+export async function createEmployee(data:EmployeeCreate):Promise<Employee> {
+ const response=await tenantApi<{id:string}>('employees',{method:'POST',body:JSON.stringify({employee:input(data)})});
+ const employee=await getEmployeeById(response.id); if(!employee) throw new Error('Employee saved but reload failed.'); return employee;
 }
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function deleteEmployee(id: string): Promise<boolean> {
-  const exists = useOperations.getState().employees.some((e) => e.id === id);
-  if (!exists) return mockDelay(false);
-  useOperations.getState().removeEmployee(id);
-  return mockDelay(true);
+export async function updateEmployee(id:string,data:Partial<Employee>):Promise<Employee|undefined> {
+ const previous=await getEmployeeById(id); if(!previous) throw new Error('Employee not found.');
+ const merged={...previous,...data};
+ // Only write sensitive objects when the caller explicitly edits them.
+ const core=input({...merged,bankDetails:undefined,statutory:undefined});
+ const employee={...core,...(data.bankDetails?{bankDetails:data.bankDetails}:{}),...(data.statutory?{statutory:{pan:data.statutory.pan,uan:data.statutory.uan,esicNumber:data.statutory.esicNumber}}:{})};
+ await tenantApi('employees',{method:'POST',body:JSON.stringify({id,expectedVersion:data.version??previous.version,employee})});
+ return getEmployeeById(id);
 }
-
-// ---------------------------------------------------------------------------
-// UAN duplicate validation — kept as a small service wrapper so a real
-// backend endpoint (e.g. GET /employees/uan-check) can replace it cleanly.
-// ---------------------------------------------------------------------------
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function checkDuplicateUAN(uan: string, excludeEmployeeId?: string): Promise<Employee | undefined> {
-  return mockDelay(checkDuplicateUANInStore(uan, excludeEmployeeId), 300);
+export async function deleteEmployee(_id?:string):Promise<boolean> { void _id;throw new Error('Historical employee records cannot be deleted. Change employment status instead.'); }
+export async function checkDuplicateUAN(uan:string,excludeEmployeeId?:string):Promise<Employee|undefined> {
+ if(!uan.trim())return undefined;
+ const result=await tenantApi<{employee_id:string}|null>(`employees/uan-check?uan=${encodeURIComponent(uan)}${excludeEmployeeId?`&exclude=${encodeURIComponent(excludeEmployeeId)}`:''}`);
+ return result ? getEmployeeById(result.employee_id) : undefined;
 }
-
-// ---------------------------------------------------------------------------
-// Employee status lifecycle
-// ---------------------------------------------------------------------------
-
-export interface StatusChangePayload {
-  status: EmploymentStatus;
-  effectiveDate: string;
-  reason: string;
-  remarks: string;
-  exit?: ExitRecord;
+export interface StatusChangePayload {status:EmploymentStatus;effectiveDate:string;reason:string;remarks:string;exit?:ExitRecord;expectedVersion?:number}
+export async function updateEmployeeStatus(employeeId:string,payload:StatusChangePayload):Promise<void> {
+ const current=payload.expectedVersion?undefined:await getEmployeeById(employeeId);
+ await tenantApi('employees/status',{method:'POST',body:JSON.stringify({id:employeeId,status:payload.status,expectedVersion:payload.expectedVersion??current?.version,effectiveDate:payload.effectiveDate,reason:payload.reason,remarks:payload.remarks,...(payload.exit?{exit:{lastWorkingDate:payload.exit.lastWorkingDate,exitType:payload.exit.exitType,settlementStatus:payload.exit.settlementStatus}}:{})})});
 }
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function updateEmployeeStatus(employeeId: string, payload: StatusChangePayload): Promise<void> {
-  useOperations.getState().updateEmployeeStatus(employeeId, payload);
-  return mockDelay(undefined, 700);
+export async function getStatusHistory(employeeId:string):Promise<StatusChangeRecord[]> {
+ return (await detail(employeeId)).history.map(row=>({id:row.id,employeeId:row.employee_id,previousStatus:row.previous_status,newStatus:row.new_status,effectiveDate:row.effective_date,reason:row.reason,remarks:row.remarks,changedBy:row.changed_by,changedOn:row.created_at}));
 }
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function getStatusHistory(employeeId: string) {
-  return mockDelay(useOperations.getState().statusHistory.filter((s) => s.employeeId === employeeId));
+export async function getExitRecord(id?:string):Promise<ExitRecord|undefined> {if(!id)return undefined;return(await tenantApi<ExitRecord|null>(`employees/exit?employeeId=${encodeURIComponent(id)}`))??undefined;}
+export const EMPLOYEE_IMPORT_COLUMNS=['Employee ID','First Name','Last Name','Official Email','Mobile Number','Date of Joining','Employment Type','Department','Designation','Work Location','State','PAN','UAN'] as const;
+export interface EmployeeImportRow {employeeId:string;firstName:string;lastName:string;dateOfBirth:string;gender:string;personalEmail:string;officialEmail:string;mobile:string;dateOfJoining:string;employmentType:string;department:string;designation:string;workLocation:string;state:string;pan:string;aadhaar:string;uan:string;ctc:string;status:string}
+export async function validateEmployeeImport(rows:EmployeeImportRow[]):Promise<ImportRowResult<EmployeeImportRow>[]> {
+ const existing=await getEmployees(), seen=new Set(existing.map(e=>e.employeeCode)), uans=new Set<string>();
+ return rows.map((data,index)=>{const issues:string[]=[];
+  if(!/^[A-Za-z0-9_-]{1,40}$/.test(data.employeeId))issues.push('Valid employee code is required.');
+  if(seen.has(data.employeeId))issues.push('Duplicate employee code.');seen.add(data.employeeId);
+  if(!data.firstName.trim()||!data.lastName.trim())issues.push('First and last name required.');
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.officialEmail))issues.push('Valid email required.');
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(data.dateOfJoining)||Number.isNaN(Date.parse(data.dateOfJoining)))issues.push('Valid joining date required.');
+  if(data.pan&&!/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(data.pan))issues.push('Invalid PAN.');
+  if(data.uan&&(!/^[0-9]{12}$/.test(data.uan)||uans.has(data.uan)))issues.push('Invalid or duplicate UAN.');if(data.uan)uans.add(data.uan);
+  if(data.aadhaar||data.ctc||data.dateOfBirth||data.personalEmail||data.gender)issues.push('This employee import only supports template fields. Configure personal details and salary separately.');
+  if(data.status&&data.status!=='Active')issues.push('Import starts employees as Active; use the status workflow for changes.');
+  return {row:index+1,data,status:issues.length?'Error':'Valid',issues};});
 }
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function getExitRecord(employeeId: string) {
-  return mockDelay(useOperations.getState().exits[employeeId]);
+export async function bulkImportEmployees(rows:EmployeeImportRow[]):Promise<UploadRecord> {
+ const validation=await validateEmployeeImport(rows);if(validation.some(r=>r.status!=='Valid'))throw new Error('Resolve import errors first.');
+ return tenantApi('employees/import',{method:'POST',body:JSON.stringify({rows:rows.map(row=>({employeeCode:row.employeeId,firstName:row.firstName,lastName:row.lastName,email:row.officialEmail,phone:row.mobile,joiningDate:row.dateOfJoining,department:row.department,designation:row.designation,workLocation:row.workLocation,state:row.state,employmentType:row.employmentType||'Full-time',statutory:{pan:row.pan,uan:row.uan}}))})});
 }
-
-// ---------------------------------------------------------------------------
-// Bulk import
-// ---------------------------------------------------------------------------
-
-export const EMPLOYEE_IMPORT_COLUMNS = [
-  "Employee ID",
-  "Employee Name",
-  "First Name",
-  "Last Name",
-  "Date of Birth",
-  "Gender",
-  "Personal Email",
-  "Official Email",
-  "Mobile Number",
-  "Emergency Contact",
-  "Date of Joining",
-  "Employment Type",
-  "Department",
-  "Designation",
-  "Work Location",
-  "State",
-  "Reporting Manager",
-  "PAN",
-  "Aadhaar Number",
-  "UAN",
-  "ESIC Number",
-  "Bank Name",
-  "Account Number",
-  "IFSC Code",
-  "Basic Salary",
-  "Gross Salary",
-  "CTC",
-  "PF Applicable",
-  "ESI Applicable",
-  "Professional Tax Applicable",
-  "TDS Applicable",
-  "Employee Status",
-] as const;
-
-export interface EmployeeImportRow {
-  employeeId: string;
-  firstName: string;
-  lastName: string;
-  dateOfBirth: string;
-  gender: string;
-  personalEmail: string;
-  officialEmail: string;
-  mobile: string;
-  dateOfJoining: string;
-  employmentType: string;
-  department: string;
-  designation: string;
-  workLocation: string;
-  state: string;
-  pan: string;
-  aadhaar: string;
-  uan: string;
-  ctc: string;
-  status: string;
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function validateEmployeeImport(rows: EmployeeImportRow[]): Promise<ImportRowResult<EmployeeImportRow>[]> {
-  const seenIds = new Set<string>();
-  const seenUans = new Set<string>();
-  const existingIds = new Set(useOperations.getState().employees.map((e) => e.employeeCode));
-
-  const results = rows.map((row, index): ImportRowResult<EmployeeImportRow> => {
-    const issues: string[] = [];
-    let status: ImportRowStatus = "Valid";
-
-    if (!row.employeeId.trim()) issues.push("Employee ID is required.");
-    if (!row.firstName.trim() || !row.lastName.trim()) issues.push("First and last name are required.");
-    if (!row.officialEmail.includes("@")) issues.push("Official email looks invalid.");
-    if (!/^\d{10}$/.test(row.mobile.replace(/\D/g, ""))) issues.push("Mobile number should be 10 digits.");
-    if (row.pan && !/^[A-Z]{5}\d{4}[A-Z]$/.test(row.pan.toUpperCase())) issues.push("PAN format looks invalid.");
-    if (!row.ctc || Number.isNaN(Number(row.ctc))) issues.push("CTC must be a number.");
-
-    if (existingIds.has(row.employeeId) || seenIds.has(row.employeeId)) {
-      issues.push(`Employee ID ${row.employeeId} already exists.`);
-      status = "Duplicate";
-    }
-    if (row.uan) {
-      const uanTaken = checkDuplicateUANInStore(row.uan) || seenUans.has(row.uan);
-      if (uanTaken) {
-        issues.push(`UAN ${row.uan} already belongs to another employee.`);
-        status = "Duplicate";
-      }
-      seenUans.add(row.uan);
-    }
-    seenIds.add(row.employeeId);
-
-    if (status !== "Duplicate") {
-      if (issues.length > 0) status = issues.some((i) => i.includes("required") || i.includes("must be")) ? "Error" : "Warning";
-    }
-
-    return { row: index + 1, data: row, status, issues };
-  });
-
-  return mockDelay(results, 900);
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function bulkImportEmployees(rows: EmployeeImportRow[]): Promise<UploadRecord> {
-  const state = useOperations.getState();
-  const employees: Employee[] = rows.map((row) => {
-    const { id, employeeCode } = nextEmployeeId();
-    return {
-      id,
-      employeeCode: row.employeeId || employeeCode,
-      firstName: row.firstName,
-      lastName: row.lastName,
-      fullName: `${row.firstName} ${row.lastName}`,
-      email: row.officialEmail,
-      personalEmail: row.personalEmail || row.officialEmail,
-      phone: row.mobile,
-      department: (row.department as Employee["department"]) || "Operations",
-      designation: row.designation || "Employee",
-      status: (row.status as Employee["status"]) || "Active",
-      joiningDate: row.dateOfJoining || new Date().toISOString().slice(0, 10),
-      dateOfBirth: row.dateOfBirth || "1995-01-01",
-      gender: (row.gender as Employee["gender"]) || "Male",
-      bloodGroup: "O+",
-      maritalStatus: "Single",
-      address: "",
-      city: row.workLocation || "",
-      state: row.state || "Karnataka",
-      pincode: "",
-      emergencyContact: { name: "", relation: "", phone: "" },
-      workLocation: row.workLocation || "",
-      nationality: "Indian",
-      languages: ["English"],
-      bankDetails: { accountHolderName: `${row.firstName} ${row.lastName}`, accountNumber: "", ifscCode: "", bankName: "", branch: "" },
-      statutory: { pan: row.pan || "", aadhaar: row.aadhaar || "", uan: row.uan || undefined },
-      salaryStructureId: "ss-1",
-      ctc: Number(row.ctc) || 600000,
-      employmentType: (row.employmentType as Employee["employmentType"]) || "Full-time",
-      category: "Permanent",
-    };
-  });
-
-  const record = state.bulkImportEmployees(employees);
-  return mockDelay(record, 1200);
-}
-
-// ---------------------------------------------------------------------------
-// Bulk actions (multi-select toolbar on the Employees table)
-// ---------------------------------------------------------------------------
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function bulkAssignSalaryStructure(employeeIds: string[], salaryStructureId: string): Promise<void> {
-  useOperations.getState().bulkAssign(employeeIds, { salaryStructureId }, "Bulk Assign Salary Structure");
-  return mockDelay(undefined, 700);
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function bulkSetDepartment(employeeIds: string[], department: Employee["department"]): Promise<void> {
-  useOperations.getState().bulkAssign(employeeIds, { department }, "Bulk Change Department");
-  return mockDelay(undefined, 700);
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function bulkSetWorkLocation(employeeIds: string[], workLocation: string): Promise<void> {
-  useOperations.getState().bulkAssign(employeeIds, { workLocation }, "Bulk Set Work Location");
-  return mockDelay(undefined, 700);
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function bulkSetState(employeeIds: string[], state: string): Promise<void> {
-  useOperations.getState().bulkAssign(employeeIds, { state }, "Bulk Update State");
-  return mockDelay(undefined, 700);
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function bulkSetStatutoryApplicability(employeeIds: string[], field: "pfApplicable" | "esiApplicable", value: boolean): Promise<void> {
-  const ops = useOperations.getState();
-  employeeIds.forEach((id) => ops.updateKYC(id, { [field]: value, overridden: true }));
-  ops.addAudit({ action: `Bulk ${field === "pfApplicable" ? "PF" : "ESI"} ${value ? "Enabled" : "Disabled"}`, previous: "", next: `${employeeIds.length} employees`, remarks: "" });
-  return mockDelay(undefined, 700);
-}
+async function bulk(ids:string[],field:string,value:string|boolean) {await tenantApi('employees/bulk',{method:'POST',body:JSON.stringify({ids,field,value})});}
+export async function bulkAssignSalaryStructure(ids:string[],value:string) {await bulk(ids,'salaryStructureId',value);}
+export async function bulkSetDepartment(ids:string[],value:Employee['department']) {await bulk(ids,'department',value);}
+export async function bulkSetWorkLocation(ids:string[],value:string) {await bulk(ids,'workLocation',value);}
+export async function bulkSetState(ids:string[],value:string) {await bulk(ids,'state',value);}
+export async function bulkSetStatutoryApplicability(ids:string[],field:'pfApplicable'|'esiApplicable',value:boolean) {await bulk(ids,field,value);}

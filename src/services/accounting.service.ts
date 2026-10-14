@@ -1,88 +1,26 @@
-import { accountGroups, ledgers as mockLedgers } from "@/data/mock/chartOfAccounts";
-import {
-  customers,
-  vendors,
-  recentInvoices,
-  purchaseInvoices,
-  recentVouchers,
-  gstSummary,
-  cashBankHistory,
-  cashFlowHistory,
-  topExpenses,
-} from "@/data/mock/accounting";
-import { dashboardKpis, accountsSummary, payrollSummary } from "@/data/mock/dashboard";
-import { mockDelay } from "@/lib/async";
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function getAccountingDashboard() {
-  return mockDelay({
-    revenue: accountsSummary.revenue,
-    expenses: accountsSummary.expenses,
-    netProfit: accountsSummary.profitBeforeTax,
-    bankBalance: dashboardKpis.bankBalance,
-    payables: accountsSummary.payablesToVendors,
-    gstPayable: accountsSummary.gstPayable,
-    receivables: accountsSummary.outstandingReceivables,
-    cashBalance: cashBankHistory[cashBankHistory.length - 1].cash,
-    recentInvoices,
-    recentVouchers,
-    gstSummary,
-    cashBankHistory,
-    payrollAccounting: {
-      payrollCost: payrollSummary.netSalaryPayable,
-      employerContribution: 525000,
-      totalPayrollCost: payrollSummary.netSalaryPayable + 525000,
-      salaryLiabilities: 1260000,
-    },
-  });
+import * as invoiceApi from './invoice.service';
+import * as accountsApi from './accounts.service';
+import { getDashboardOverview } from './dashboard.service';
+import { getBanking } from './banking.service';
+import { tenantApi } from '@/lib/tenant-api';
+import { companyToday } from '@/domain/dates';
+import { sum } from '@/domain/money';
+import type { GstReport } from '@/domain/compliance';
+export async function getAccountingDashboard(){
+ const[overview,bank,sales,purchases,vouchers,gst,accounts,posting]=await Promise.all([getDashboardOverview(),getBanking(),invoiceApi.getInvoiceRows('Sales'),invoiceApi.getInvoiceRows('Purchase'),accountsApi.getVouchers(),getGstSummary(),accountsApi.accountData(),tenantApi<{mappings:{code:string;account_id:string}[]}>('payroll-accounting')]);
+ const netAccount=posting.mappings.find(row=>row.code==='netPayable')?.account_id,expenseAccount=posting.mappings.find(row=>row.code==='salaryExpense')?.account_id,employerAccount=posting.mappings.find(row=>row.code==='employerExpense')?.account_id;
+ const month=companyToday().slice(0,7),monthVouchers=await accountsApi.getJournals();
+ const movements=(id:string|undefined)=>id?sum(monthVouchers.filter(row=>row.status==='Posted'&&row.date.startsWith(month)).flatMap(row=>row.journal_lines.filter(line=>line.account_id===id).map(line=>Number(line.debit_minor)-Number(line.credit_minor))))/100:null;
+ const payrollCost=movements(expenseAccount),employerContribution=movements(employerAccount);
+ return{revenue:overview.accountsSummary.revenue,expenses:overview.accountsSummary.expenses,netProfit:overview.accountsSummary.profitBeforeTax,bankBalance:bank.accounts.some(row=>row.kind==='Bank')?sum(bank.accounts.filter(row=>row.kind==='Bank').map(row=>row.balanceMinor))/100:null,cashBalance:bank.accounts.some(row=>row.kind==='Cash')?sum(bank.accounts.filter(row=>row.kind==='Cash').map(row=>row.balanceMinor))/100:null,payables:sum(purchases.map(row=>invoiceApi.invoiceBalance(row).outstanding))/100,receivables:sum(sales.map(row=>invoiceApi.invoiceBalance(row).outstanding))/100,gstPayable:null,gstSummary:gst,recentInvoices:sales.slice(0,5).map(row=>({id:row.id,invoiceNumber:row.invoice_number,customer:row.party_snapshot.name,amount:Number(row.total_minor)/100,status:invoiceApi.invoiceStatus(row)})),recentVouchers:vouchers.filter(row=>row.status==='Posted').slice(0,5),cashBankHistory:[],payrollAccounting:{payrollCost,employerContribution,totalPayrollCost:payrollCost!==null&&employerContribution!==null?sum([Math.round(payrollCost*100),Math.round(employerContribution*100)])/100:null,salaryLiabilities:netAccount?-Number(accounts.balances.find(row=>row.account_id===netAccount)?.balance_minor??0)/100:null}};
 }
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function getChartOfAccounts() {
-  return mockDelay({ groups: accountGroups, ledgers: mockLedgers });
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function getLedgers() {
-  return mockDelay(mockLedgers);
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function getCustomers() {
-  return mockDelay(customers);
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function getVendors() {
-  return mockDelay(vendors);
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function getSalesInvoices() {
-  return mockDelay(recentInvoices);
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function getPurchaseInvoices() {
-  return mockDelay(purchaseInvoices);
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function getVouchers() {
-  return mockDelay(recentVouchers);
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function getGstSummary() {
-  return mockDelay(gstSummary);
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function getCashFlowHistory() {
-  return mockDelay(cashFlowHistory);
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function getTopExpenses() {
-  return mockDelay(topExpenses);
-}
+export function getChartOfAccounts(){return accountsApi.getChartOfAccounts();}
+export function getLedgers(){return accountsApi.getLedgers();}
+export function getCustomers(){return invoiceApi.getCustomers();}
+export function getVendors(){return invoiceApi.getVendors();}
+export function getSalesInvoices(){return invoiceApi.getSalesInvoices();}
+export function getPurchaseInvoices(){return invoiceApi.getPurchaseInvoices();}
+export function getVouchers(){return accountsApi.getVouchers();}
+export function getGstSummary(month=companyToday().slice(0,7)){return tenantApi<GstReport>('gst?month='+month);}
+export async function getCashFlowHistory(){return(await getBanking()).cashFlow;}
+export async function getTopExpenses(){return(await getDashboardOverview()).topExpenses;}

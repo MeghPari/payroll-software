@@ -13,6 +13,7 @@ export interface SalaryComponent {
 export type SalaryStructureStatus = "Active" | "Draft" | "Archived";
 
 export interface SalaryStructure {
+  version?: number;
   id: string;
   name: string;
   status: SalaryStructureStatus;

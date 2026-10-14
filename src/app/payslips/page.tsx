@@ -17,8 +17,11 @@ import { QuickActionsCard } from "@/components/shared/quick-actions-card";
 import { CardGridSkeleton } from "@/components/shared/loading-skeleton";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Button } from "@/components/ui/button";
-import { getPayslips, publishPayslips, reprocessFailedPayslips } from "@/services/payslip.service";
-import { departments } from "@/data/mock/employees";
+import { getPayslips, payslipAction, downloadPayslip } from "@/services/payslip.service";
+import { companyToday,monthLabel } from '@/domain/dates';
+import { payrollMonths } from '@/store/app-store';
+import { useSessionStore } from '@/store/session-store';
+import { permitted } from '@/lib/tenant-api';
 import { formatINR } from "@/utils/format";
 import type { Payslip, PayslipStatus } from "@/types";
 import { toast } from "sonner";
@@ -31,7 +34,12 @@ const statusColors: Record<PayslipStatus, string> = {
   Generated: "#7C5CFC",
 };
 
-export default function PayslipsPage() {
+export default function PayslipsPage(){const id=useSessionStore(state=>state.companyId);return <PayslipsPageTenantContent key={id}/>;}
+function PayslipsPageTenantContent(){const[month,setMonth]=useState(()=>monthLabel(companyToday().slice(0,7)));return <PayslipsPagePeriodContent key={month} month={month} onMonthChange={setMonth}/>;}
+function PayslipsPagePeriodContent({month,onMonthChange}:{month:string;onMonthChange:(month:string)=>void}){
+ const setMonth=onMonthChange;
+  const companyId=useSessionStore(s=>s.companyId);
+
   const [payslips, setPayslips] = useState<Payslip[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -41,11 +49,11 @@ export default function PayslipsPage() {
   const [publishing, setPublishing] = useState(false);
 
   useEffect(() => {
-    getPayslips().then((data) => {
+    getPayslips(month).then((data) => {
       setPayslips(data);
       setLoading(false);
-    });
-  }, []);
+    }).catch(error=>{setPayslips([]);setLoading(false);toast.error(error.message);});
+  }, [month,companyId]);
 
   const filtered = useMemo(() => {
     return payslips.filter((p) => {
@@ -70,23 +78,9 @@ export default function PayslipsPage() {
   }, [payslips]);
 
   async function handlePublishAll() {
-    setPublishing(true);
-    const pendingIds = payslips.filter((p) => p.status === "Pending" || p.status === "Generated").map((p) => p.id);
-    await publishPayslips(pendingIds);
-    const refreshed = await getPayslips();
-    setPayslips(refreshed);
-    setPublishing(false);
-    setPublishOpen(false);
-    toast.success(`Payslips published to ${pendingIds.length} employees`);
+    setPublishing(true);try{const response=await payslipAction(month,'publish');setPayslips(await getPayslips(month));toast.success(`${response.count} payslips published`);}catch(error){toast.error(error instanceof Error?error.message:'Publication failed.');}finally{setPublishing(false);setPublishOpen(false);}
   }
-
-  async function handleReprocess() {
-    const count = await reprocessFailedPayslips();
-    const refreshed = await getPayslips();
-    setPayslips(refreshed);
-    toast.success(count > 0 ? `${count} failed payslips reprocessed` : "No failed payslips to reprocess");
-  }
-
+  async function handleReprocess(){setPublishing(true);try{const response=await payslipAction(month,'generate');setPayslips(await getPayslips(month));toast.success(`${response.count} payslips generated from locked payroll`);}catch(error){toast.error(error instanceof Error?error.message:'Generation failed.');}finally{setPublishing(false);}}
   const columns: Column<Payslip>[] = [
     {
       id: "employee",
@@ -107,8 +101,8 @@ export default function PayslipsPage() {
       id: "pdf",
       header: "PDF",
       enableSorting: false,
-      cell: () => (
-        <Button variant="ghost" size="icon-sm" aria-label="Download payslip PDF" onClick={(e) => { e.stopPropagation(); toast.info("Downloading payslip PDF..."); }}>
+      cell: ({row}) => (
+        <Button variant="ghost" size="icon-sm" aria-label="Download payslip PDF" onClick={(e) => { e.stopPropagation(); downloadPayslip(row.original.id).catch(error=>toast.error(error.message)); }}>
           <FileText className="h-4 w-4 text-danger" />
         </Button>
       ),
@@ -122,7 +116,7 @@ export default function PayslipsPage() {
 
   return (
     <div>
-      <PageHeader title="Payslips" subtitle="Generate, publish and track employee payslips." breadcrumb="Payroll › Payslips" />
+      <PageHeader title="Payslips" subtitle="Generate, publish and track employee payslips." breadcrumb="Payroll › Payslips" actions={<FilterSelect value={month}onChange={value=>{setMonth(value);setPayslips([]);}}options={payrollMonths}/>} />
 
       {loading ? (
         <CardGridSkeleton count={4} />
@@ -131,7 +125,7 @@ export default function PayslipsPage() {
           <StatCard icon={Users} tone="blue" label="Total Employees" value={String(payslips.length)} />
           <StatCard icon={Wallet} tone="green" label="Total Net Payable" value={formatINR(totalNetPayable)} />
           <StatCard icon={Send} tone="purple" label="Published to App" value={String(publishedCount)} helperText={`${((publishedCount / payslips.length) * 100 || 0).toFixed(0)}% of employees`} />
-          <StatCard icon={TrendingUp} tone="cyan" label="Payment Success Rate" value={`${successRate}%`} />
+          <StatCard icon={TrendingUp} tone="cyan" label="Generated payslips" value={`${successRate}%`} />
         </div>
       )}
 
@@ -140,7 +134,7 @@ export default function PayslipsPage() {
           <div className="border-b border-border p-4">
             <FilterBar>
               <SearchInput value={search} onChange={setSearch} placeholder="Search by employee name or ID..." className="w-full sm:w-64" />
-              <FilterSelect value={department} onChange={setDepartment} options={["All", ...departments]} placeholder="Department" ariaLabel="Filter by department" />
+              <FilterSelect value={department} onChange={setDepartment} options={["All", ...new Set(payslips.map(p=>p.department).filter(Boolean))]} placeholder="Department" ariaLabel="Filter by department" />
               <FilterSelect value={status} onChange={setStatus} options={["All", "Paid", "Published", "Generated", "Pending", "Failed"]} placeholder="Status" ariaLabel="Filter by status" />
             </FilterBar>
           </div>
@@ -174,11 +168,11 @@ export default function PayslipsPage() {
 
           <QuickActionsCard
             actions={[
-              { icon: FileDown, label: "Bulk Download Payslips", description: "Download payslips as PDF (ZIP)", onClick: () => toast.info("Preparing ZIP download...") },
-              { icon: Send, label: "Publish Payslips", description: "Publish payslips to employee app", onClick: () => setPublishOpen(true) },
-              { icon: Mail, label: "Send Payslips by Email", description: "Email payslips to employees", onClick: () => toast.info("Queued payslip emails") },
-              { icon: BellRing, label: "Notify Employees", description: "Send in-app notification", onClick: () => toast.success("Employees notified") },
-              { icon: RotateCcw, label: "Reprocess Failed", description: "Retry failed payslip generation", onClick: handleReprocess },
+              { icon: FileDown, label: "Bulk Download Payslips", description: "Download payslips as PDF (ZIP)", disabled:true, onClick: () => {} },
+              { icon: Send, label: "Publish Payslips", description: "Publish payslips to employee app", disabled:publishing||!permitted("payroll.approve")||!payslips.some(p=>p.status==="Generated"), onClick: () => setPublishOpen(true) },
+              { icon: Mail, label: "Send Payslips by Email", description: "Email payslips to employees", disabled:true, onClick: () => {} },
+              { icon: BellRing, label: "Notify Employees", description: "Send in-app notification", disabled:true, onClick: () => {} },
+              { icon: RotateCcw, label: "Generate Payslips", description: "Generate from locked payroll", disabled:publishing||!permitted("payroll.run"), onClick: handleReprocess },
             ]}
           />
 

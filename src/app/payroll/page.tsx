@@ -1,4 +1,6 @@
 "use client";
+import { PriorPayrollCorrections } from '@/components/payroll/prior-payroll-corrections';
+import { AdjustmentsPanel } from '@/components/payroll/adjustments-panel';
 
 import { useEffect, useMemo, useState } from "react";
 import type { Column } from "@/components/shared/data-table";
@@ -42,13 +44,17 @@ import {
   approvePayrollPeriod,
   lockPayrollPeriod,
   unlockPayrollPeriod,
+  recalculatePayrollMonth,
   type PayrollValidationSummary,
 } from "@/services/payroll.service";
 import { finalizeAttendance, isAttendanceFinalized } from "@/services/attendance.service";
 import { getEmployees } from "@/services/employee.service";
-import { monthKeyFromLabel } from "@/store/operations-store";
+import { companyToday,monthLabel,monthKey as monthKeyFromLabel } from '@/domain/dates';
+import { useSessionStore } from '@/store/session-store';
+import { permitted } from '@/lib/tenant-api';
+import { downloadCSV } from '@/lib/csv';
 import { payrollMonths } from "@/store/app-store";
-import { CURRENT_PAYROLL_MONTH } from "@/data/mock/attendance";
+
 import { formatINR } from "@/utils/format";
 import type { Employee, PayrollCalculation, PayrollExceptionType, PayrollPeriod, PayrollStep, PayrollValidationIssue } from "@/types";
 import { toast } from "sonner";
@@ -70,17 +76,19 @@ const STEP_LABELS = [
 function buildSteps(period: PayrollPeriod | null, hasAttendance: boolean): PayrollStep[] {
   const finalized = !!period?.attendanceFinalized;
   const approved = !!period?.approved;
-  const locked = period?.status === "Locked";
+
 
   const statusFor = (index: number): PayrollStep["status"] => {
     if (index === 0) return "completed";
     if (index === 1) return hasAttendance ? "completed" : "in-progress";
     if (index === 2) return hasAttendance ? (finalized ? "completed" : "in-progress") : "pending";
     if (index === 3) return finalized ? "completed" : hasAttendance ? "in-progress" : "pending";
-    if (index === 4 || index === 5) return finalized ? "completed" : "pending";
+    if (index === 4 || index === 5) return period?.validated ? "completed" : "pending";
     if (index === 6) return finalized ? (approved ? "completed" : "in-progress") : "pending";
     if (index === 7) return approved ? "completed" : "pending";
-    if (index >= 8) return locked ? "completed" : "pending";
+    if(index===8)return period?.published?"completed":"pending";
+    if(index===9)return period?.disbursed?"completed":"pending";
+    if(index===10)return period?.posted?"completed":"pending";
     return "pending";
   };
 
@@ -89,8 +97,12 @@ function buildSteps(period: PayrollPeriod | null, hasAttendance: boolean): Payro
 
 const SEVERITY_ICON = { Passed: CheckCircle2, Warning: AlertTriangle, "Blocking Error": OctagonAlert } as const;
 
-export default function PayrollRunPage() {
-  const [month, setMonth] = useState(CURRENT_PAYROLL_MONTH);
+export default function PayrollRunPage(){const id=useSessionStore(state=>state.companyId);return <PayrollRunPageTenantContent key={id}/>;}
+function PayrollRunPageTenantContent(){const[month,setMonth]=useState(()=>monthLabel(companyToday().slice(0,7)));return <PayrollRunPagePeriodContent key={month} month={month} onMonthChange={setMonth}/>;}
+function PayrollRunPagePeriodContent({month,onMonthChange}:{month:string;onMonthChange:(month:string)=>void}){
+ const setMonth=onMonthChange;
+  const companyId=useSessionStore(s=>s.companyId);
+
   const monthKey = monthKeyFromLabel(month);
 
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -127,7 +139,7 @@ export default function PayrollRunPage() {
       setEligibility(elig);
       setExceptions(exc);
       setLoading(false);
-    });
+    }).catch(error=>{setRows([]);setPeriod(null);setLoading(false);toast.error(error.message);});
   }
 
   useEffect(() => {
@@ -135,16 +147,16 @@ export default function PayrollRunPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [monthKey]);
+  }, [monthKey,companyId]);
 
   const employeeMap = useMemo(() => new Map(employees.map((e) => [e.id, e])), [employees]);
 
   const totals = useMemo(
     () => ({
-      grossPay: rows.reduce((s, r) => s + r.grossEarnings, 0),
+      grossPay: rows.reduce((s, r) => s + r.adjustedGross, 0),
       deductions: rows.reduce((s, r) => s + r.totalDeductions, 0),
       netPayable: rows.filter((r) => r.status !== "Salary Hold").reduce((s, r) => s + r.netPayable, 0),
-      employerCost: rows.reduce((s, r) => s + r.employerPF + r.employerESI, 0),
+      employerCost: rows.reduce((s, r) => s + r.employerPF + r.employerESI + r.employerOther, 0),
     }),
     [rows]
   );
@@ -155,7 +167,7 @@ export default function PayrollRunPage() {
       await finalizeAttendance(monthKey);
       toast.success(`Attendance finalized for ${month}`);
       refresh();
-    } finally {
+    } catch(error) {toast.error(error instanceof Error?error.message:"Payroll action failed.");} finally {
       setBusy(null);
       setFinalizeConfirm(false);
     }
@@ -172,7 +184,7 @@ export default function PayrollRunPage() {
         toast.success("Validation passed", { description: `${summary.passed} checks passed, ${summary.warnings} warning(s).` });
       }
       refresh();
-    } finally {
+    } catch(error) {toast.error(error instanceof Error?error.message:"Payroll action failed.");} finally {
       setValidating(false);
     }
   }
@@ -180,10 +192,10 @@ export default function PayrollRunPage() {
   async function handleApprove() {
     setBusy("approve");
     try {
-      await approvePayrollPeriod(monthKey);
+      await approvePayrollPeriod(monthKey,period?.version);
       toast.success(`Payroll approved for ${month}`);
       refresh();
-    } finally {
+    } catch(error) {toast.error(error instanceof Error?error.message:"Payroll action failed.");} finally {
       setBusy(null);
       setApproveConfirm(false);
     }
@@ -192,19 +204,18 @@ export default function PayrollRunPage() {
   async function handleLock() {
     setBusy("lock");
     try {
-      await lockPayrollPeriod(monthKey);
+      await lockPayrollPeriod(monthKey,period?.version);
       toast.success(`Payroll locked for ${month}`, { description: "Payslips and disbursement can now proceed." });
       refresh();
-    } finally {
+    } catch(error) {toast.error(error instanceof Error?error.message:"Payroll action failed.");} finally {
       setBusy(null);
       setLockConfirm(false);
     }
   }
 
   async function handleUnlock() {
-    await unlockPayrollPeriod(monthKey);
-    toast.info("Payroll unlocked for editing");
-    refresh();
+    const reason=window.prompt('Reason for payroll correction');if(!reason?.trim())return;
+    try{await unlockPayrollPeriod(monthKey,period?.version,reason);toast.info('Payroll unlocked for correction');refresh();}catch(error){toast.error(error instanceof Error?error.message:'Unable to unlock payroll.');}
   }
 
   const isLocked = period?.status === "Locked";
@@ -254,10 +265,10 @@ export default function PayrollRunPage() {
         actions={
           <>
             <FilterSelect value={month} onChange={setMonth} options={payrollMonths} className="w-40 bg-white" />
-            <Button variant="outline" className="gap-1.5" disabled={rows.length === 0}>
+            <Button variant="outline" className="gap-1.5" disabled={rows.length === 0} onClick={()=>downloadCSV(`payroll-${monthKey}.csv`,["Employee ID","Gross earnings","Deductions","Net payable"],rows.map(row=>[row.employeeId,row.adjustedGross,row.totalDeductions,row.netPayable]))}>
               <Download className="h-4 w-4" /> Download Preview
             </Button>
-            <Button variant="outline" className="gap-1.5" disabled={rows.length === 0}>
+            <Button variant="outline" className="gap-1.5" disabled title="Email delivery is awaiting integration">
               <Send className="h-4 w-4" /> Send Preview
             </Button>
           </>
@@ -275,7 +286,7 @@ export default function PayrollRunPage() {
               </p>
             </div>
           </div>
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={handleUnlock}>
+          <Button variant="outline" size="sm" className="gap-1.5" disabled={!permitted("payroll.unlock")} onClick={handleUnlock}>
             <LockOpen className="h-3.5 w-3.5" /> Unlock
           </Button>
         </div>
@@ -293,15 +304,15 @@ export default function PayrollRunPage() {
           finalized ? (
             <StatusBadge status="Attendance Locked for Payroll" tone="success" />
           ) : (
-            <Button size="sm" className="gap-1.5" onClick={() => setFinalizeConfirm(true)} disabled={busy === "finalize"}>
+            <Button size="sm" className="gap-1.5" onClick={() => setFinalizeConfirm(true)} disabled={busy === "finalize"||!permitted("attendance.write")}>
               <Lock className="h-3.5 w-3.5" /> Finalize Attendance
             </Button>
           )
         }
       />
 
-      <SectionCard className="mb-5" title="Payroll Validation" subtitle="Run the validation engine before processing payroll." actions={
-        <Button size="sm" variant="outline" className="gap-1.5" onClick={handleValidate} disabled={validating}>
+      <PriorPayrollCorrections key={"correction/"+companyId+monthKey} month={monthKey} employees={employees} protectedRun={!!period?.approved||period?.status==='Locked'} onSaved={refresh}/><AdjustmentsPanel key={companyId+monthKey} month={monthKey} employees={employees} protectedRun={!!period?.approved||period?.status==='Locked'} onSaved={refresh}/><SectionCard className="mb-5" title="Payroll Validation" subtitle="Run the validation engine before processing payroll." actions={
+        <Button size="sm" variant="outline" className="gap-1.5" onClick={handleValidate} disabled={validating||!permitted("payroll.run")}>
           {validating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
           {validating ? "Validating..." : "Run Validation"}
         </Button>
@@ -407,7 +418,7 @@ export default function PayrollRunPage() {
         title="Payroll Review"
         subtitle={`${employees.length} employees · ${month} · Click a row for the full calculation breakdown`}
         actions={
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={refresh} disabled={loading}>
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={async()=>{setBusy("calculate");try{await recalculatePayrollMonth(monthKey);refresh();}catch(error){toast.error(error instanceof Error?error.message:"Calculation failed.");}finally{setBusy(null);}}} disabled={loading||!!busy||isLocked||!!period?.approved||!permitted("payroll.run")}>
             <RefreshCcw className="h-3.5 w-3.5" /> Recalculate Data
           </Button>
         }
@@ -417,10 +428,10 @@ export default function PayrollRunPage() {
       </SectionCard>
 
       <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <Button variant="outline" size="lg" className="gap-1.5" disabled={isLocked || !!period?.approved} onClick={() => setApproveConfirm(true)}>
+        <Button variant="outline" size="lg" className="gap-1.5" disabled={isLocked || !!period?.approved||!period?.validated||!permitted("payroll.approve")} onClick={() => setApproveConfirm(true)}>
           <PlayCircle className="h-4 w-4" /> Approve Payroll
         </Button>
-        <Button size="lg" className="gap-1.5" disabled={isLocked || !period?.approved} onClick={() => setLockConfirm(true)}>
+        <Button size="lg" className="gap-1.5" disabled={isLocked || !period?.approved||!permitted("payroll.lock")} onClick={() => setLockConfirm(true)}>
           <ShieldCheck className="h-4 w-4" /> {isLocked ? "Payroll Locked" : "Approve & Lock"}
         </Button>
       </div>

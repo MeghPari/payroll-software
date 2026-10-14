@@ -1,166 +1,44 @@
-import { mockDelay } from "@/lib/async";
-import { grossOf, useOperations, activeHoldFor } from "@/store/operations-store";
-import type { ImportRowResult, ImportRowStatus, SalaryHold, SalaryProfile, SalaryRevision, UploadRecord } from "@/types";
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function getSalaryProfile(employeeId: string): Promise<SalaryProfile | undefined> {
-  return mockDelay(useOperations.getState().salaries[employeeId]);
+import { tenantApi } from '@/lib/tenant-api';
+import { companyToday,monthKey } from '@/domain/dates';
+import { toMinor } from '@/domain/currency';
+import { componentCodes,getSalaryStructures } from './salary-structure.service';
+import { getEmployees } from './employee.service';
+import type {SalaryProfile,SalaryRevision,SalaryHold,ImportRowResult,UploadRecord}from '@/types';
+interface Assignment {id:string;employee_id:string;structure_id:string;effective_from:string;remarks:string;created_by:string;created_at:string;salary_structures:{name:string};employee_salary_component_values:{component_code:string;amount_minor:number}[]}
+function profile(row:Assignment):SalaryProfile {
+ const amounts=Object.fromEntries(componentCodes.map(code=>[code,0]));for(const item of row.employee_salary_component_values)amounts[item.component_code]=Number(item.amount_minor)/100;
+ return {employeeId:row.employee_id,effectiveFrom:row.effective_from,structure:row.salary_structures.name,remarks:row.remarks,...amounts}as SalaryProfile;
 }
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function updateSalaryProfile(employeeId: string, profile: SalaryProfile): Promise<SalaryProfile> {
-  useOperations.getState().updateSalaryProfile(employeeId, profile);
-  return mockDelay(profile, 800);
+export async function salaryAssignments(employeeId?:string) {return tenantApi<Assignment[]>(`salary${employeeId?`?employeeId=${encodeURIComponent(employeeId)}`:''}`);}
+export async function getSalaryProfile(employeeId:string):Promise<SalaryProfile|undefined> {const row=(await salaryAssignments(employeeId)).find(r=>r.effective_from<=companyToday());return row?profile(row):undefined;}
+export async function updateSalaryProfile(employeeId:string,data:SalaryProfile):Promise<SalaryProfile> {
+ const structure=(await getSalaryStructures()).find(s=>s.name===data.structure||s.id===data.structure);if(!structure)throw new Error('Choose an active salary structure.');
+ const amounts=Object.fromEntries(componentCodes.map(code=>[code,toMinor(data[code])]));
+ await tenantApi('salary',{method:'POST',body:JSON.stringify({employeeId,structureId:structure.id,effectiveFrom:data.effectiveFrom,amounts,remarks:data.remarks??''})});return data;
 }
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function getSalaryRevisions(employeeId?: string): Promise<SalaryRevision[]> {
-  const all = useOperations.getState().revisions;
-  return mockDelay(employeeId ? all.filter((r) => r.employeeId === employeeId) : all);
+const gross=(p:SalaryProfile)=>p.basic+p.hra+p.special+p.conveyance+p.other+p.bonus+p.variable;
+export async function getSalaryRevisions(employeeId?:string):Promise<SalaryRevision[]> {
+ const rows=await salaryAssignments(employeeId);
+ return rows.map(row=>{const previous=rows.filter(r=>r.employee_id===row.employee_id&&r.effective_from<row.effective_from).sort((a,b)=>b.effective_from.localeCompare(a.effective_from))[0];const old=previous?gross(profile(previous)):0;const current=profile(row),revised=gross(current);
+  return {id:row.id,employeeId:row.employee_id,previousGross:old,revisedGross:revised,effectiveFrom:row.effective_from,revisionPercent:old?Math.round((revised-old)/old*10000)/100:0,changedBy:row.created_by,changedOn:row.created_at,profile:current};});
 }
-
-// ---------------------------------------------------------------------------
-// Salary hold / release
-// ---------------------------------------------------------------------------
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function holdSalary(employeeId: string, month: string, reason: string, remarks: string): Promise<void> {
-  useOperations.getState().holdSalary(employeeId, month, reason, remarks);
-  return mockDelay(undefined, 700);
+export async function holdSalary(employeeId:string,month:string,reason:string,remarks:string){await tenantApi('salary/holds',{method:'POST',body:JSON.stringify({employeeId,month:monthKey(month),reason,remarks,release:false})});}
+export async function releaseSalary(employeeId:string,month:string,remarks:string){await tenantApi('salary/holds',{method:'POST',body:JSON.stringify({employeeId,month:monthKey(month),reason:remarks,remarks,release:true})});}
+export async function getSalaryHoldHistory(employeeId:string):Promise<SalaryHold[]>{return tenantApi(`salary/holds?employeeId=${encodeURIComponent(employeeId)}`);}
+export async function getActiveSalaryHold(employeeId:string,month:string){return(await getSalaryHoldHistory(employeeId)).find(h=>monthKey(h.month)===monthKey(month)&&h.status==='Held');}
+export const SALARY_IMPORT_COLUMNS=['Employee ID','Effective From','Salary Structure','Basic','HRA','Special Allowance','Other Allowance','Variable Pay','Remarks']as const;
+export interface SalaryImportRow {employeeId:string;effectiveFrom:string;structure:string;basic:string;hra:string;special:string;other:string;grossSalary:string;variable:string;remarks:string;employeeName?:string;oldGross?:number;newGross?:number;difference?:number}
+export async function validateSalaryImport(rows:SalaryImportRow[]):Promise<ImportRowResult<SalaryImportRow>[]> {
+ const employees=await getEmployees(),structures=await getSalaryStructures(),seen=new Set<string>();
+ return rows.map((data,index)=>{const issues:string[]=[];const e=employees.find(e=>e.id===data.employeeId||e.employeeCode===data.employeeId);
+  if(!e)issues.push('Employee not found.');if(seen.has(data.employeeId))issues.push('Duplicate employee in batch.');seen.add(data.employeeId);
+  if(!structures.some(s=>s.status==='Active'&&s.name===data.structure))issues.push('Choose an active structure name.');
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(data.effectiveFrom))issues.push('Effective date required.');
+  try{for(const key of ['basic','hra','special','other','variable']as const)toMinor(data[key]||'0');}catch(error){issues.push(error instanceof Error?error.message:'Invalid amount.');}
+  return {row:index+1,data:{...data,employeeName:e?.fullName},status:issues.length?'Error':'Valid',issues};});
 }
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function releaseSalary(employeeId: string, month: string, remarks: string): Promise<void> {
-  useOperations.getState().releaseSalary(employeeId, month, remarks);
-  return mockDelay(undefined, 700);
+export async function bulkUpdateSalary(rows:SalaryImportRow[]):Promise<UploadRecord> {
+ if((await validateSalaryImport(rows)).some(row=>row.status!=='Valid'))throw new Error('Resolve salary import errors.');
+ const employees=await getEmployees(),structures=await getSalaryStructures();
+ return tenantApi('salary/import',{method:'POST',body:JSON.stringify({rows:rows.map(row=>({employeeId:employees.find(e=>e.id===row.employeeId||e.employeeCode===row.employeeId)!.id,structureId:structures.find(s=>s.name===row.structure)!.id,effectiveFrom:row.effectiveFrom,remarks:row.remarks,amounts:Object.fromEntries(componentCodes.map(code=>[code,toMinor(['basic','hra','special','other','variable'].includes(code)?row[code as 'basic']||'0':'0')]))}))})});
 }
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function getSalaryHoldHistory(employeeId?: string): Promise<SalaryHold[]> {
-  const all = useOperations.getState().holds;
-  return mockDelay(employeeId ? all.filter((h) => h.employeeId === employeeId) : all);
-}
-
-export function getActiveSalaryHold(employeeId: string, month: string): SalaryHold | undefined {
-  return activeHoldFor(employeeId, month);
-}
-
-// ---------------------------------------------------------------------------
-// Bulk salary upload
-// ---------------------------------------------------------------------------
-
-export const SALARY_IMPORT_COLUMNS = [
-  "Employee ID",
-  "Employee Name",
-  "Effective From",
-  "Salary Structure",
-  "Basic",
-  "HRA",
-  "Special Allowance",
-  "Other Allowance",
-  "Gross Salary",
-  "Variable Pay",
-  "PF Applicable",
-  "ESI Applicable",
-  "Professional Tax",
-  "TDS",
-  "Remarks",
-] as const;
-
-export interface SalaryImportRow {
-  employeeId: string;
-  effectiveFrom: string;
-  structure: string;
-  basic: string;
-  hra: string;
-  special: string;
-  other: string;
-  grossSalary: string;
-  variable: string;
-  remarks: string;
-  /** Populated by validateSalaryImport for display in the preview table. */
-  employeeName?: string;
-  oldGross?: number;
-  newGross?: number;
-  difference?: number;
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function validateSalaryImport(rows: SalaryImportRow[]): Promise<ImportRowResult<SalaryImportRow>[]> {
-  const state = useOperations.getState();
-  const seen = new Set<string>();
-
-  const results = rows.map((row, index): ImportRowResult<SalaryImportRow> => {
-    const issues: string[] = [];
-    let status: ImportRowStatus = "Valid";
-    const employee = state.employees.find((e) => e.employeeCode === row.employeeId || e.id === row.employeeId);
-
-    if (!employee) {
-      issues.push(`Employee ${row.employeeId} not found.`);
-      status = "Error";
-    }
-    if (seen.has(row.employeeId)) {
-      issues.push("Duplicate record for this employee in the file.");
-      status = "Duplicate";
-    }
-    seen.add(row.employeeId);
-
-    const newGross = Number(row.grossSalary) || Number(row.basic) + Number(row.hra) + Number(row.special) + Number(row.other);
-    if (!newGross || Number.isNaN(newGross)) {
-      issues.push("Incorrect or missing salary amount.");
-      status = status === "Error" ? status : "Error";
-    }
-    if (!row.effectiveFrom) {
-      issues.push("Effective date is missing.");
-      status = status === "Error" || status === "Duplicate" ? status : "Warning";
-    }
-
-    const oldGross = employee ? grossOf(state.salaries[employee.id]) : 0;
-
-    return {
-      row: index + 1,
-      status,
-      issues,
-      data: {
-        ...row,
-        employeeName: employee?.fullName ?? "Unknown",
-        oldGross,
-        newGross: newGross || 0,
-        difference: (newGross || 0) - oldGross,
-      },
-    };
-  });
-
-  return mockDelay(results, 900);
-}
-
-// TODO: Replace mock implementation with REST/GraphQL API.
-export async function bulkUpdateSalary(rows: SalaryImportRow[]): Promise<UploadRecord> {
-  const state = useOperations.getState();
-  const updates = rows
-    .map((row) => {
-      const employee = state.employees.find((e) => e.employeeCode === row.employeeId || e.id === row.employeeId);
-      if (!employee) return undefined;
-      const basic = Number(row.basic) || Math.round((Number(row.grossSalary) || 0) * 0.5);
-      const hra = Number(row.hra) || Math.round((Number(row.grossSalary) || 0) * 0.2);
-      const special = Number(row.special) || Math.max(0, (Number(row.grossSalary) || 0) - basic - hra);
-      const profile: SalaryProfile = {
-        ...state.salaries[employee.id],
-        employeeId: employee.id,
-        effectiveFrom: row.effectiveFrom || new Date().toISOString().slice(0, 10),
-        structure: row.structure || state.salaries[employee.id]?.structure || "SVS Employee Structure",
-        basic,
-        hra,
-        special,
-        other: Number(row.other) || 0,
-        variable: Number(row.variable) || 0,
-        remarks: row.remarks,
-      };
-      return { employeeId: employee.id, profile };
-    })
-    .filter((u): u is { employeeId: string; profile: SalaryProfile } => !!u);
-
-  const record = state.bulkUpdateSalary(updates);
-  return mockDelay(record, 1200);
-}
-

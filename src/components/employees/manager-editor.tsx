@@ -1,0 +1,9 @@
+'use client';
+import { useEffect,useState } from 'react';import { SectionCard } from '@/components/shared/section-card';import { Button } from '@/components/ui/button';import { getEmployees } from '@/services/employee.service';import { permitted,tenantApi } from '@/lib/tenant-api';import type { Employee } from '@/types';import { toast } from 'sonner';
+export function ManagerEditor({employee,onSaved}:{employee:Employee;onSaved:()=>void}){
+ const[rows,setRows]=useState<Employee[]>([]),[manager,setManager]=useState(employee.managerId??''),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ useEffect(()=>{let cancelled=false;getEmployees().then(rows=>{if(!cancelled)setRows(rows);}).catch(error=>{if(!cancelled)setError(error instanceof Error?error.message:'Unable to load managers.');});return()=>{cancelled=true;};},[]);
+ if(!permitted('employees.write'))return null;
+ async function save(){setBusy(true);try{await tenantApi('employees/manager',{method:'POST',body:JSON.stringify({employeeId:employee.id,managerId:manager||null,expectedVersion:employee.version})});toast.success('Reporting manager saved');onSaved();}catch(error){toast.error(error instanceof Error?error.message:'Unable to save reporting manager.');}finally{setBusy(false);}}
+ return <SectionCard title="Reporting Manager" className="mt-4">{error&&<p role="alert" className="mb-3 text-destructive">{error}</p>}<div className="flex flex-wrap gap-3"><select aria-label="Reporting manager" className="h-9 rounded-md border px-3" value={manager} onChange={event=>setManager(event.target.value)}><option value="">Not assigned</option>{rows.filter(row=>row.id!==employee.id&&!['Exited','Inactive'].includes(row.status)).map(row=><option key={row.id} value={row.id}>{row.employeeCode} — {row.fullName}</option>)}</select><Button disabled={busy||!!error} onClick={()=>void save()}>Save Manager</Button></div></SectionCard>;
+}

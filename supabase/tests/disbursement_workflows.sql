@@ -1,0 +1,73 @@
+begin;
+insert into auth.users(id,email,email_confirmed_at)values('40000000-0000-4000-8000-000000000001','finance@example.invalid',now());
+insert into public.user_profiles(id)values('40000000-0000-4000-8000-000000000001');
+insert into public.companies(id,name)values('40000000-0000-4000-8000-000000000011','Disbursement fixture');
+insert into public.user_company_roles(company_id,user_id,role)values('40000000-0000-4000-8000-000000000011','40000000-0000-4000-8000-000000000001','Finance');
+insert into public.employees(id,company_id,employee_code,first_name,last_name,email,joining_date)values('40000000-0000-4000-8000-000000000021','40000000-0000-4000-8000-000000000011','PAYFIXTURE','Payment','Fixture','employee@example.invalid','2026-01-01');
+insert into public.employee_bank_details(company_id,employee_id,account_holder_name,account_number,ifsc_code)values('40000000-0000-4000-8000-000000000011','40000000-0000-4000-8000-000000000021','Payment Fixture','1234567890','TEST0123456');
+insert into public.employee_statutory_details(company_id,employee_id,bank_status)values('40000000-0000-4000-8000-000000000011','40000000-0000-4000-8000-000000000021','Pending Verification');
+insert into public.payroll_runs(id,company_id,month,status)values('40000000-0000-4000-8000-000000000031','40000000-0000-4000-8000-000000000011','2026-09-01','Locked');
+insert into public.payroll_run_employees values('40000000-0000-4000-8000-000000000011','40000000-0000-4000-8000-000000000031','40000000-0000-4000-8000-000000000021',20000,0,20000,0,'{"employeeCode":"PAYFIXTURE","employeeName":"Captured Payment Name"}');
+set local role authenticated;
+select set_config('request.jwt.claim.sub','40000000-0000-4000-8000-000000000001',true);
+do $$declare c uuid:='40000000-0000-4000-8000-000000000011';expense_group uuid;liability_group uuid;asset_group uuid;expense uuid;payable uuid;bank_ledger uuid;bank uuid;begin
+ expense_group:=public.save_account(c,'{"kind":"group","name":"Expenses","type":"Expense"}');liability_group:=public.save_account(c,'{"kind":"group","name":"Liabilities","type":"Liability"}');asset_group:=public.save_account(c,'{"kind":"group","name":"Assets","type":"Asset"}');
+ expense:=public.save_account(c,jsonb_build_object('kind','ledger','name','Salary Expense','code','SAL','groupId',expense_group));payable:=public.save_account(c,jsonb_build_object('kind','ledger','name','Salary Payable','code','PAY','groupId',liability_group));bank_ledger:=public.save_account(c,jsonb_build_object('kind','ledger','name','Company Bank','code','BANK','groupId',asset_group));bank:=public.save_bank_account(c,jsonb_build_object('kind','Bank','accountId',bank_ledger,'name','Company Bank'));
+ begin perform public.prepare_disbursement(c,'2026-09-01',bank);raise exception 'FAIL payment instructions without accrual';exception when check_violation then null;end;
+ perform public.configure_financial_year(c,'2026-04-01','2027-03-31');perform public.save_payroll_accounts(c,jsonb_build_object('salaryExpense',expense,'netPayable',payable));perform public.post_payroll_journal(c,'2026-09-01',1);
+ begin perform public.prepare_disbursement(c,'2026-09-01',bank);raise exception 'FAIL unverified bank instructions';exception when check_violation then null;end;
+ if public.disbursement_batch(c,'2026-09-01')is not null then raise exception 'FAIL invalid preparation left batch';end if;
+end $$;
+reset role;
+update public.employee_statutory_details set bank_status='Verified'where company_id='40000000-0000-4000-8000-000000000011';
+set local role authenticated;
+do $$declare c uuid:='40000000-0000-4000-8000-000000000011';e uuid:='40000000-0000-4000-8000-000000000021';bank uuid;b uuid;payment uuid;details jsonb;begin
+ select id into bank from public.bank_accounts where company_id=c;
+ b:=public.prepare_disbursement(c,'2026-09-01',bank);
+ details:=public.disbursement_batch(c,'2026-09-01');
+ if details#>>'{items,0,bank,accountNumber}'<>'••••7890'or(details#>>'{items,0,paidMinor}')::bigint<>0 then raise exception 'FAIL masked bank or false payment status';end if;
+ begin perform public.prepare_disbursement(c,'2026-09-01',bank);raise exception 'FAIL duplicate instructions';exception when unique_violation then null;end;
+
+ declare failure uuid;retry uuid;entries integer;begin
+ select count(*)into entries from public.journal_entries where company_id=c;
+ failure:=public.record_salary_attempt(c,b,e,'{"kind":"Failed","amountMinor":10000,"date":"2026-09-29","reference":"BANK-REJECTION-1","evidence":"Actual fixture bank rejection"}');
+ retry:=public.record_salary_attempt(c,b,e,jsonb_build_object('kind','Retry Prepared','amountMinor',10000,'date','2026-10-01','reference','RETRY-REVIEW-1','evidence','Reviewed retry evidence','retryOf',failure));
+ if(select count(*)from public.journal_entries where company_id=c)<>entries or(public.disbursement_batch(c,'2026-09-01')#>>'{items,0,paidMinor}')::bigint<>0 then raise exception 'FAIL attempt falsely posted or paid';end if;
+ begin perform public.record_salary_attempt(c,b,e,jsonb_build_object('kind','Retry Prepared','amountMinor',10000,'date','2026-10-01','reference','DUPLICATE-RETRY','evidence','Duplicate','retryOf',failure));raise exception 'FAIL duplicate retry accepted';exception when unique_violation then null;end;
+ begin perform public.record_salary_attempt(c,b,e,'{"kind":"Retry Prepared","amountMinor":10000,"date":"2026-10-01","reference":"INVALID-PARENT","evidence":"Unknown","retryOf":"40000000-0000-4000-8000-000000000099"}');raise exception 'FAIL unknown failed attempt accepted';exception when check_violation then null;end;
+ begin perform public.record_salary_attempt(c,b,e,'{"kind":"Failed","amountMinor":20001,"date":"2026-10-01","reference":"TOO-LARGE","evidence":"Excess"}');raise exception 'FAIL excessive failed attempt';exception when check_violation then null;end;
+ end;
+ begin perform public.record_salary_payment(c,b,e,10000,'2026-08-31','BEFORE-MONTH','Wrong month');raise exception 'FAIL pre-month salary payment';exception when invalid_parameter_value then null;end;
+ begin perform public.record_salary_payment(c,b,e,10000,'2999-01-01','FUTURE','Future evidence');raise exception 'FAIL future salary payment';exception when invalid_parameter_value then null;end;
+ payment:=public.record_salary_payment(c,b,e,10000,'2026-09-29','SALARY-REF-1','Reviewed fixture bank debit');
+ begin perform public.record_salary_payment(c,b,e,10000,'2026-10-01','SALARY-REF-1','Duplicate fixture');raise exception 'FAIL duplicate salary reference';exception when unique_violation then null;end;
+ begin perform public.record_salary_payment(c,b,e,10001,'2026-10-02','EXCESS','Excess fixture');raise exception 'FAIL excessive salary payment';exception when check_violation then null;end;
+ perform public.record_salary_payment(c,b,e,10000,'2026-10-02','SALARY-REF-2','Reviewed final fixture bank debit');
+ details:=public.disbursement_batch(c,'2026-09-01');if(details#>>'{items,0,paidMinor}')::bigint<>20000 or jsonb_array_length(details->'payments')<>2 then raise exception 'FAIL paid totals or duplicate payment persisted';end if;
+ begin perform public.cancel_disbursement(c,b,'Incorrect batch');raise exception 'FAIL confirmed payments cancelled';exception when check_violation then null;end;
+ if(select balance_minor from public.account_balances(c)where account_id=(select id from public.ledger_accounts where company_id=c and code='PAY'))<>0 or(select balance_minor from public.account_balances(c)where account_id=(select id from public.ledger_accounts where company_id=c and code='BANK'))<>-20000 then raise exception 'FAIL salary payment ledger balances';end if;
+end $$;
+reset role;
+insert into auth.users(id,email,email_confirmed_at)values('40000000-0000-4000-8000-000000000002','payroll-workflow@example.invalid',now());insert into public.user_profiles(id)values('40000000-0000-4000-8000-000000000002');insert into public.user_company_roles(company_id,user_id,role)values('40000000-0000-4000-8000-000000000011','40000000-0000-4000-8000-000000000002','Payroll Admin');
+select set_config('request.jwt.claim.sub','40000000-0000-4000-8000-000000000002',true);set local role authenticated;
+do $$begin if(public.payroll_workflow_status('40000000-0000-4000-8000-000000000011','2026-09-01')->>'disbursed')::boolean is not true then raise exception 'FAIL completed payment workflow';end if;end $$;
+reset role;select set_config('request.jwt.claim.sub','40000000-0000-4000-8000-000000000001',true);
+update public.employee_bank_details set account_number='9999999999'where company_id='40000000-0000-4000-8000-000000000011';
+do $$begin
+ if(select bank_status from public.employee_statutory_details where company_id='40000000-0000-4000-8000-000000000011')<>'Pending Verification'then raise exception 'FAIL bank verification survived identifier change';end if;
+ if(select bank_snapshot->>'accountNumber'from public.disbursement_items where company_id='40000000-0000-4000-8000-000000000011')<>'1234567890'then raise exception 'FAIL immutable payment bank snapshot';end if;
+end $$;
+set local role authenticated;
+do $$declare c uuid:='40000000-0000-4000-8000-000000000011';details jsonb;item jsonb;b uuid;begin
+ details:=public.disbursement_batch(c,'2026-09-01',true);b:=(details->>'id')::uuid;
+ if details#>>'{items,0,bank,accountNumber}'<>'1234567890'then raise exception 'FAIL instruction export lost captured bank';end if;
+ for item in select value from jsonb_array_elements(details->'payments')loop perform public.reverse_bank_transaction(c,(item->>'transactionId')::uuid,'2026-10-03','Fixture book correction');end loop;
+ if(public.disbursement_batch(c,'2026-09-01')#>>'{items,0,paidMinor}')::bigint<>0 then raise exception 'FAIL reversed payments still counted';end if;
+ perform public.cancel_disbursement(c,b,'Reprepare after reviewed account correction');
+ if public.disbursement_batch(c,'2026-09-01')is not null then raise exception 'FAIL cancelled batch still active';end if;
+ begin perform public.disbursement_batch('40000000-0000-4000-8000-000000000099','2026-09-01',true);raise exception 'FAIL cross-company payment details';exception when insufficient_privilege then null;end;
+end $$;
+reset role;select set_config('request.jwt.claim.sub','40000000-0000-4000-8000-000000000002',true);set local role authenticated;
+do $$begin if(public.payroll_workflow_status('40000000-0000-4000-8000-000000000011','2026-09-01')->>'disbursed')::boolean is not false then raise exception 'FAIL cancelled payments workflow';end if;end $$;
+reset role;
+rollback;

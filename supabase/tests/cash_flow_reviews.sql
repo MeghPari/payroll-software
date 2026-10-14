@@ -1,0 +1,24 @@
+begin;
+insert into auth.users(id,email,email_confirmed_at)values('f1000000-0000-4000-8000-000000000001','cash-review@example.invalid',now());insert into public.user_profiles(id)values('f1000000-0000-4000-8000-000000000001');
+insert into public.companies(id,name)values('f2000000-0000-4000-8000-000000000001','Cash review fixture');insert into public.user_company_roles(company_id,user_id,role)values('f2000000-0000-4000-8000-000000000001','f1000000-0000-4000-8000-000000000001','Finance');
+select set_config('request.jwt.claim.sub','f1000000-0000-4000-8000-000000000001',true);set local role authenticated;
+do $$declare c uuid:='f2000000-0000-4000-8000-000000000001';g uuid;bank uuid;cash uuid;income uuid;j uuid;internal uuid;p jsonb;begin
+ g:=public.save_account(c,'{"kind":"group","name":"Assets","type":"Asset"}');bank:=public.save_account(c,jsonb_build_object('kind','ledger','name','Bank','code','BANK','groupId',g));cash:=public.save_account(c,jsonb_build_object('kind','ledger','name','Cash','code','CASH','groupId',g));g:=public.save_account(c,'{"kind":"group","name":"Income","type":"Income"}');income:=public.save_account(c,jsonb_build_object('kind','ledger','name','Income','code','INC','groupId',g));
+ perform public.configure_financial_year(c,'2026-04-01','2027-03-31');perform public.save_bank_account(c,jsonb_build_object('kind','Bank','name','Bank','accountId',bank));perform public.save_bank_account(c,jsonb_build_object('kind','Cash','name','Cash','accountId',cash));
+ j:=public.create_journal(c,jsonb_build_object('voucherNumber','FLOW','date','2026-09-01','type','Journal','narration','Posted receipt fixture','lines',jsonb_build_array(jsonb_build_object('accountId',bank,'debitMinor',10000,'creditMinor',0),jsonb_build_object('accountId',income,'debitMinor',0,'creditMinor',10000))));
+ p:='{"allocations":[{"category":"Operating","amountMinor":10000}],"reviewReference":"Reviewed receipt classification"}';
+ begin perform public.review_cash_flow(c,j,0,p);raise exception 'FAIL draft cash review';exception when check_violation then null;end;
+ perform public.post_journal(c,j,1);
+ begin perform public.review_cash_flow(c,j,0,'{"allocations":[{"category":"Operating","amountMinor":9999}],"reviewReference":"Wrong"}');raise exception 'FAIL mismatched cash allocation';exception when check_violation then null;end;
+ perform public.review_cash_flow(c,j,0,p);
+ begin perform public.review_cash_flow(c,j,0,p);raise exception 'FAIL stale cash review';exception when serialization_failure then null;end;
+ perform public.review_cash_flow(c,j,1,'{"allocations":[{"category":"Operating","amountMinor":6000},{"category":"Financing","amountMinor":4000}],"reviewReference":"Reviewed split correction"}');
+ if(select count(*)from public.cash_flow_review_history where company_id=c and journal_id=j)<>2 or(select net_minor from public.cash_flow_reviews where company_id=c and journal_id=j)<>10000 then raise exception 'FAIL immutable cash review history';end if;
+ begin perform public.review_cash_flow(c,j,2,'{"allocations":[{"category":"Operating","amountMinor":5000},{"category":"Operating","amountMinor":5000}],"reviewReference":"Duplicate category"}');raise exception 'FAIL duplicate cash category';exception when invalid_parameter_value then null;end;
+ internal:=public.create_journal(c,jsonb_build_object('voucherNumber','INTERNAL','date','2026-09-02','type','Contra','narration','Internal bank/cash transfer','lines',jsonb_build_array(jsonb_build_object('accountId',cash,'debitMinor',5000,'creditMinor',0),jsonb_build_object('accountId',bank,'debitMinor',0,'creditMinor',5000))));perform public.post_journal(c,internal,1);
+ begin perform public.review_cash_flow(c,internal,0,p);raise exception 'FAIL zero-net internal transfer';exception when check_violation then null;end;
+ begin perform public.review_cash_flow('f2000000-0000-4000-8000-000000000099',j,0,p);raise exception 'FAIL other tenant cash review';exception when insufficient_privilege then null;end;
+ begin update public.cash_flow_review_history set content='{}'where company_id=c;raise exception 'FAIL cash history modification';exception when insufficient_privilege then null;end;
+end $$;
+reset role;
+rollback;

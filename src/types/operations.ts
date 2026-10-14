@@ -61,6 +61,8 @@ export interface EmployeeStatutoryProfile {
 }
 
 export interface EmployeeKYC extends EmployeeStatutoryProfile {
+  applicabilityConfigured?: Partial<Record<'pfApplicable'|'esiApplicable'|'ptApplicable'|'tdsApplicable',boolean>>;
+  taxRegimeConfigured?: boolean;
   employeeId: string;
   panStatus: VerificationStatus;
   aadhaarStatus: VerificationStatus;
@@ -132,6 +134,7 @@ export type AttendanceStatus =
   | "Missing Punch";
 
 export interface DailyAttendanceRecord {
+  scheduledStart?:string|null;
   id: string;
   employeeId: string;
   date: string;
@@ -150,6 +153,8 @@ export interface DailyAttendanceRecord {
 }
 
 export interface AttendanceSummary {
+  proration?: string;
+  prorationDays?: number;
   payrollDays: number;
   present: number;
   paidLeave: number;
@@ -207,6 +212,8 @@ export type PayrollEligibility = "Eligible" | "Salary Hold" | "Exited" | "No Pay
 export type PayrollCalculationStatus = "Ready" | "Salary Hold" | "Attendance Issue" | "KYC Issue" | "Bank Details Missing" | "Error";
 
 export interface PayrollCalculation {
+  earningsBreakdown?:Record<string,number>;
+  deductionBreakdown?:Record<string,number>;
   employeeId: string;
   month: string;
   salary: SalaryProfile;
@@ -245,6 +252,7 @@ export interface PayrollValidationIssue {
 export type PayrollPeriodStatus = "Draft" | "Processing" | "Processed" | "Approved" | "Locked";
 
 export interface PayrollPeriod {
+  version?: number;
   month: string;
   status: PayrollPeriodStatus;
   attendanceFinalized: boolean;

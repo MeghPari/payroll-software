@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -37,6 +37,9 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MarkEditAttendanceDialog } from "@/components/attendance/mark-edit-attendance-dialog";
 import { BulkUploadAttendanceDialog } from "@/components/attendance/bulk-upload-attendance-dialog";
+import { tenantApi } from '@/lib/tenant-api';
+import { CalendarSettings } from '@/components/attendance/calendar-settings';
+import { LeaveWorkflows } from '@/components/attendance/leave-workflows';
 import {
   getDailyAttendance,
   getLeaveBalances,
@@ -46,23 +49,32 @@ import {
   getUploadHistory,
   isAttendanceFinalized,
   finalizeAttendance,
+  reopenAttendance,
   lateMinutes,
   updateLeaveRequestStatus,
   type MonthlyRegisterRow,
   type TodayAttendanceCounts,
 } from "@/services/attendance.service";
 import { getEmployees } from "@/services/employee.service";
-import { departments } from "@/data/mock/employees";
-import { today, monthKeyFromLabel, indianStates, useOperations } from "@/store/operations-store";
+import { companyToday as today,monthKey as monthKeyFromLabel,monthLabel } from '@/domain/dates';
+import { permitted } from '@/lib/tenant-api';
+import { useSessionStore } from '@/store/session-store';
+import { indianStates } from "@/store/operations-store";
 import { payrollMonths } from "@/store/app-store";
-import { CURRENT_PAYROLL_MONTH } from "@/data/mock/attendance";
+
 import { downloadCSV } from "@/lib/csv";
 import { ATTENDANCE_IMPORT_COLUMNS } from "@/services/attendance.service";
-import type { DailyAttendanceRecord, Employee, LeaveRequest, UploadRecord } from "@/types";
+import type { DailyAttendanceRecord, Employee, LeaveRequest } from "@/types";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
 export default function AttendancePage() {
+  const companyId=useSessionStore(state=>state.companyId);
+  return <AttendanceContent key={companyId} />;
+}
+
+function AttendanceContent() {
+  const companyId=useSessionStore(s=>s.companyId);
   const [tab, setTab] = useState("today");
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,8 +83,8 @@ export default function AttendancePage() {
     getEmployees().then((data) => {
       setEmployees(data);
       setLoading(false);
-    });
-  }, []);
+    }).catch(error=>{setLoading(false);toast.error(error.message);});
+  }, [companyId]);
 
   return (
     <div>
@@ -85,7 +97,7 @@ export default function AttendancePage() {
           <TabsTrigger value="leave-requests">Leave Requests</TabsTrigger>
           <TabsTrigger value="leave-balance">Leave Balance</TabsTrigger>
           <TabsTrigger value="upload">Upload Attendance</TabsTrigger>
-          <TabsTrigger value="upload-history">Upload History</TabsTrigger>
+          <TabsTrigger value="upload-history">Upload History</TabsTrigger><TabsTrigger value="calendar">Work Calendar</TabsTrigger>
         </TabsList>
 
         <TabsContent value="today" className="mt-4">
@@ -106,6 +118,7 @@ export default function AttendancePage() {
         <TabsContent value="upload-history" className="mt-4">
           <UploadHistoryTab />
         </TabsContent>
+        <TabsContent value="calendar" className="mt-4"><CalendarSettings employees={employees}/></TabsContent>
       </Tabs>
     </div>
   );
@@ -133,12 +146,12 @@ function TodayAttendanceTab({ employees, loading: employeesLoading }: { employee
       setCounts(c);
       setRecords(r);
       setLoading(false);
-    });
+    }).catch(error=>{setLoading(false);toast.error(error.message);});
   }
 
   useEffect(() => {
     // Re-fetches (and resets the loading flag) whenever the selected date changes.
-    // `refresh` is intentionally omitted below — it's redefined every render and
+    // `refresh` is intentionally omitted below â€” it's redefined every render and
     // only needs to run when `date` changes.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     refresh();
@@ -176,22 +189,22 @@ function TodayAttendanceTab({ employees, loading: employeesLoading }: { employee
     },
     { id: "department", header: "Department", accessorFn: (row) => row.employee.department },
     { id: "shift", header: "Shift", accessorFn: (row) => row.record.shift },
-    { id: "checkIn", header: "Check-In", accessorFn: (row) => row.record.checkIn, cell: ({ row }) => row.original.record.checkIn || "—" },
-    { id: "checkOut", header: "Check-Out", accessorFn: (row) => row.record.checkOut, cell: ({ row }) => row.original.record.checkOut || "—" },
+    { id: "checkIn", header: "Check-In", accessorFn: (row) => row.record.checkIn, cell: ({ row }) => row.original.record.checkIn || "â€”" },
+    { id: "checkOut", header: "Check-Out", accessorFn: (row) => row.record.checkOut, cell: ({ row }) => row.original.record.checkOut || "â€”" },
     {
       id: "workHours",
       header: "Working Hours",
       accessorFn: (row) => row.record.workHours,
-      cell: ({ row }) => (row.original.record.workHours ? `${Math.floor(row.original.record.workHours)}h ${Math.round((row.original.record.workHours % 1) * 60)}m` : "—"),
+      cell: ({ row }) => (row.original.record.workHours ? `${Math.floor(row.original.record.workHours)}h ${Math.round((row.original.record.workHours % 1) * 60)}m` : "â€”"),
     },
     { id: "status", header: "Status", accessorFn: (row) => row.record.status, cell: ({ row }) => <StatusBadge status={row.original.record.status} /> },
     {
       id: "lateBy",
       header: "Late By",
-      accessorFn: (row) => lateMinutes(row.record.checkIn),
+      accessorFn: (row) => lateMinutes(row.record.checkIn,row.record.scheduledStart),
       cell: ({ row }) => {
-        const late = lateMinutes(row.original.record.checkIn);
-        return late > 0 ? <span className="text-warning">{late} min late</span> : "—";
+        const late = lateMinutes(row.original.record.checkIn,row.original.record.scheduledStart);
+        return late > 0 ? <span className="text-warning">{late} min late</span> : "â€”";
       },
     },
     { id: "source", header: "Attendance Source", accessorFn: (row) => row.record.source },
@@ -230,7 +243,7 @@ function TodayAttendanceTab({ employees, loading: employeesLoading }: { employee
           <StatCard icon={CalendarCheck} tone="purple" label="On Leave" value={String(counts.onLeave)} />
           <StatCard icon={CalendarOff} tone="amber" label="Half Day" value={String(counts.halfDay)} />
           <StatCard icon={CalendarX} tone="slate" label="Weekly Off / Holiday" value={String(counts.weeklyOff)} />
-          <StatCard icon={Clock3} tone="amber" label="Late Arrival" value={String(counts.late)} />
+          <StatCard icon={Clock3} tone="amber" label="Late Arrival" value={counts.late===null?"Not configured":String(counts.late)} />
           <StatCard icon={AlertCircle} tone="red" label="Missing Punch" value={String(counts.missingPunch)} />
         </div>
       )}
@@ -241,7 +254,7 @@ function TodayAttendanceTab({ employees, loading: employeesLoading }: { employee
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Input type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value)} className="w-40" />
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setMarkOpen(true)}>
+            <Button variant="outline" size="sm" className="gap-1.5" disabled={!permitted("attendance.write")} onClick={() => setMarkOpen(true)}>
               <UserPlus2 className="h-3.5 w-3.5" /> Mark Attendance
             </Button>
             <Button
@@ -265,7 +278,7 @@ function TodayAttendanceTab({ employees, loading: employeesLoading }: { employee
         <div className="border-b border-border p-4">
           <FilterBar>
             <FilterSelect value={statusFilter} onChange={setStatusFilter} options={["All", "Present", "Absent", "Paid Leave", "Unpaid Leave", "Half Day", "Weekly Off", "Holiday", "Work From Home", "Missing Punch"]} placeholder="Status" />
-            <FilterSelect value={departmentFilter} onChange={setDepartmentFilter} options={["All", ...departments]} placeholder="Department" />
+            <FilterSelect value={departmentFilter} onChange={setDepartmentFilter} options={["All", ...new Set(employees.map(e=>e.department).filter(Boolean))]} placeholder="Department" />
             <FilterSelect value={stateFilter} onChange={setStateFilter} options={["All", ...indianStates]} placeholder="State" />
           </FilterBar>
         </div>
@@ -301,13 +314,16 @@ function TodayAttendanceTab({ employees, loading: employeesLoading }: { employee
 // Attendance Register (monthly)
 // ---------------------------------------------------------------------------
 
-function AttendanceRegisterTab({ employees, loading: employeesLoading }: { employees: Employee[]; loading: boolean }) {
-  const [month, setMonth] = useState(CURRENT_PAYROLL_MONTH);
+function AttendanceRegisterTab({employees,loading}:{employees:Employee[];loading:boolean}){const[month,setMonth]=useState(()=>monthLabel(today().slice(0,7)));return <AttendanceRegisterPeriod key={month} month={month} setMonth={setMonth} employees={employees} loading={loading}/>;}
+function AttendanceRegisterPeriod({employees,loading:employeesLoading,month,setMonth}:{employees:Employee[];loading:boolean;month:string;setMonth:(month:string)=>void}){
+  const [markOpen, setMarkOpen] = useState(false);
+
   const [rows, setRows] = useState<MonthlyRegisterRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [finalized, setFinalized] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
+  const [finalizationIssue, setFinalizationIssue] = useState<{ month: string; message: string } | null>(null);
 
   const monthKey = monthKeyFromLabel(month);
   const employeeMap = useMemo(() => new Map(employees.map((e) => [e.id, e])), [employees]);
@@ -318,7 +334,7 @@ function AttendanceRegisterTab({ employees, loading: employeesLoading }: { emplo
       setRows(r);
       setFinalized(f);
       setLoading(false);
-    });
+    }).catch(error=>{setLoading(false);toast.error(error.message);});
   }
 
   useEffect(() => {
@@ -330,11 +346,12 @@ function AttendanceRegisterTab({ employees, loading: employeesLoading }: { emplo
 
   async function handleFinalize() {
     setFinalizing(true);
+    setFinalizationIssue(null);
     try {
       await finalizeAttendance(monthKey);
       toast.success(`Attendance finalized for ${month}`, { description: "Attendance is now locked for payroll processing." });
       refresh();
-    } finally {
+    } catch(error) { const message=error instanceof Error?error.message:"Attendance action failed.";setFinalizationIssue({month:monthKey,message});toast.error(message); } finally {
       setFinalizing(false);
       setConfirmOpen(false);
     }
@@ -354,7 +371,7 @@ function AttendanceRegisterTab({ employees, loading: employeesLoading }: { emplo
             <span className="font-medium text-foreground">{row.original.employee.fullName}</span>
           </div>
         ) : (
-          "—"
+          "â€”"
         ),
     },
     { id: "present", header: "Present", accessorFn: (row) => row.summary.present },
@@ -364,6 +381,7 @@ function AttendanceRegisterTab({ employees, loading: employeesLoading }: { emplo
     { id: "halfDays", header: "Half Days", accessorFn: (row) => row.summary.halfDays },
     { id: "weeklyOff", header: "Weekly Off", accessorFn: (row) => row.summary.weeklyOff },
     { id: "holidays", header: "Holidays", accessorFn: (row) => row.summary.holidays },
+    { id: "missing", header: "Incomplete Days", accessorFn: (row) => row.summary.missing, cell: ({row}) => <span className={row.original.summary.missing ? "font-semibold text-danger" : "text-success"}>{row.original.summary.missing}</span> },
     { id: "payableDays", header: "Payable Days", accessorFn: (row) => row.summary.payableDays, cell: ({ row }) => <span className="font-semibold text-foreground">{row.original.summary.payableDays}</span> },
     { id: "lopDays", header: "LOP Days", accessorFn: (row) => row.summary.lopDays, cell: ({ row }) => (row.original.summary.lopDays > 0 ? <span className="text-danger">{row.original.summary.lopDays}</span> : "0") },
   ];
@@ -392,21 +410,24 @@ function AttendanceRegisterTab({ employees, loading: employeesLoading }: { emplo
           size="sm"
           variant={finalized ? "outline" : "default"}
           className="gap-1.5"
-          onClick={() => (finalized ? toast.info("Unlocking attendance requires Payroll Admin approval.") : setConfirmOpen(true))}
+          disabled={!permitted(finalized?"payroll.unlock":"attendance.write")} onClick={async()=>{if(!finalized){setConfirmOpen(true);return;}const reason=window.prompt("Reason for reopening attendance");if(!reason?.trim())return;try{await reopenAttendance(monthKey,reason);refresh();}catch(error){toast.error(error instanceof Error?error.message:"Unable to reopen attendance.");}}}
         >
           {finalized ? <LockOpen className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
           {finalized ? "Unlock (Admin)" : "Finalize Attendance"}
         </Button>
       </div>
 
+      {finalizationIssue?.month === monthKey && !finalized && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-danger">{finalizationIssue.message}</p>}
       <SectionCard
         title="Monthly Attendance Register"
         subtitle={month}
-        actions={<FilterSelect value={month} onChange={setMonth} options={payrollMonths} className="w-44 bg-white" />}
+        actions={<div className="flex flex-wrap gap-2"><Button variant="outline" disabled={finalized || !permitted('attendance.write')} onClick={()=>setMarkOpen(true)}>Mark Attendance</Button><FilterSelect value={month} onChange={setMonth} options={payrollMonths} className="w-44 bg-white" /></div>}
         noPadding
       >
         <DataTable columns={columns} data={data} loading={loadingAll} pageSize={10} />
       </SectionCard>
+      {!finalized&&permitted('attendance.write')&&<Button variant="outline" disabled={loading||finalizing} onClick={async()=>{try{const result=await tenantApi<{affected:number}>('attendance/calendar',{method:'POST',body:JSON.stringify({kind:'apply',month:monthKey+'-01'})});toast.success('Created '+result.affected+' missing nonworking-day records');refresh();}catch(error){toast.error(error instanceof Error?error.message:'Unable to apply reviewed calendar.');}}}>Apply Reviewed Weekly Offs / Holidays</Button>}
+      <MarkEditAttendanceDialog open={markOpen} onOpenChange={setMarkOpen} employees={employees.filter(employee=>!['Inactive','Salary Hold'].includes(employee.status)&&employee.joiningDate<=`${monthKey}-31`&&(!employee.exitDate||employee.exitDate>=`${monthKey}-01`))} date={`${monthKey}-01`} onDone={refresh} />
 
       <ConfirmDialog
         open={confirmOpen}
@@ -434,7 +455,7 @@ function LeaveRequestsTab({ employees }: { employees: Employee[] }) {
     getLeaveRequests().then((data) => {
       setLeaves(data);
       setLoading(false);
-    });
+    }).catch(error=>{setLoading(false);toast.error(error.message);});
   }
 
   useEffect(() => {
@@ -452,7 +473,7 @@ function LeaveRequestsTab({ employees }: { employees: Employee[] }) {
   const pending = leaves.filter((l) => l.status === "Pending");
 
   return (
-    <SectionCard title="Leave Requests (Open)" noPadding>
+    <div className="space-y-4"><LeaveWorkflows employees={employees}onSaved={refresh}/><SectionCard title="Leave Requests (Open)" noPadding>
       {!loading && pending.length === 0 ? (
         <EmptyState title="No pending leave requests" description="All leave requests have been reviewed." />
       ) : (
@@ -494,10 +515,10 @@ function LeaveRequestsTab({ employees }: { employees: Employee[] }) {
                     <td className="px-4 py-3 whitespace-nowrap">{format(new Date(leave.appliedOn), "dd MMM yyyy")}</td>
                     <td className="px-4 py-3">
                       <div className="flex gap-1.5">
-                        <Button size="sm" variant="outline" className="gap-1 text-success border-emerald-200 hover:bg-emerald-50" onClick={() => handleAction(leave.id, "Approved")}>
+                        <Button size="sm" variant="outline" className="gap-1 text-success border-emerald-200 hover:bg-emerald-50" disabled={!permitted("leave.approve")} onClick={() => handleAction(leave.id, "Approved").catch(error=>toast.error(error.message))}>
                           <Check className="h-3.5 w-3.5" /> Approve
                         </Button>
-                        <Button size="sm" variant="outline" className="gap-1 text-danger border-rose-200 hover:bg-rose-50" onClick={() => handleAction(leave.id, "Rejected")}>
+                        <Button size="sm" variant="outline" className="gap-1 text-danger border-rose-200 hover:bg-rose-50" disabled={!permitted("leave.approve")} onClick={() => handleAction(leave.id, "Rejected").catch(error=>toast.error(error.message))}>
                           <X className="h-3.5 w-3.5" /> Reject
                         </Button>
                       </div>
@@ -509,7 +530,7 @@ function LeaveRequestsTab({ employees }: { employees: Employee[] }) {
           </table>
         </div>
       )}
-    </SectionCard>
+    </SectionCard></div>
   );
 }
 
@@ -522,7 +543,7 @@ function LeaveBalanceTab({ employees }: { employees: Employee[] }) {
   const employeeMap = useMemo(() => new Map(employees.map((e) => [e.id, e])), [employees]);
 
   useEffect(() => {
-    getLeaveBalances().then(setBalances);
+    getLeaveBalances().then(setBalances).catch(error=>toast.error(error.message));
   }, []);
 
   return (
@@ -566,7 +587,7 @@ function BalanceCell({ used, total }: { used: number; total: number }) {
     <td className="px-4 py-3">
       <div className="flex items-center gap-2">
         <div className="h-1.5 w-20 overflow-hidden rounded-full bg-muted">
-          <div className="h-full rounded-full bg-primary" style={{ width: `${(used / total) * 100}%` }} />
+          <div className="h-full rounded-full bg-primary" style={{ width: `${total>0?(used / total) * 100:0}%` }} />
         </div>
         <span className="whitespace-nowrap text-xs text-muted-foreground">
           {used}/{total}
@@ -603,12 +624,12 @@ function UploadAttendanceTab() {
           >
             <Download className="h-4 w-4" /> Download Attendance Template
           </Button>
-          <Button className="gap-1.5" onClick={() => setOpen(true)}>
+          <Button className="gap-1.5" disabled={!permitted("attendance.write")} onClick={() => setOpen(true)}>
             <UploadCloud className="h-4 w-4" /> Upload Attendance
           </Button>
         </div>
       </div>
-      <BulkUploadAttendanceDialog open={open} onOpenChange={setOpen} onImported={() => toast.success("Attendance imported — check Today's Attendance / Register tabs.")} />
+      <BulkUploadAttendanceDialog open={open} onOpenChange={setOpen} onImported={() => toast.success("Attendance imported â€” check Today's Attendance / Register tabs.")} />
     </SectionCard>
   );
 }
@@ -618,13 +639,14 @@ function UploadAttendanceTab() {
 // ---------------------------------------------------------------------------
 
 function UploadHistoryTab() {
-  const [recent] = useState<UploadRecord[]>(() => useOperations.getState().uploads.filter((u) => u.kind === "Attendance"));
+
   const [legacy, setLegacy] = useState<Awaited<ReturnType<typeof getUploadHistory>>>([]);
 
   useEffect(() => {
-    getUploadHistory().then(setLegacy);
+    getUploadHistory().then(setLegacy).catch(error=>toast.error(error.message));
   }, []);
 
+  const recent=legacy.map(u=>({...u,totalRows:u.recordsProcessed,validRows:u.recordsProcessed,errorRows:0}));
   return (
     <div className="space-y-4">
       <SectionCard title="Recent Attendance Uploads" noPadding>

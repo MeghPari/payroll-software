@@ -8,10 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { attendanceStatuses } from "@/store/operations-store";
-import { updateAttendance } from "@/services/attendance.service";
+import { createAttendance, updateAttendance } from "@/services/attendance.service";
 import type { AttendanceStatus, DailyAttendanceRecord, Employee } from "@/types";
 import { toast } from "sonner";
 import { History } from "lucide-react";
+import { companyToday } from '@/domain/dates';
 
 interface MarkEditAttendanceDialogProps {
   open: boolean;
@@ -34,6 +35,8 @@ export function MarkEditAttendanceDialog({ open, onOpenChange, employees, date, 
   const [remarks, setRemarks] = useState(existingRecord?.remarks ?? "");
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [fromDate, setFromDate] = useState(date);
+  const [toDate, setToDate] = useState(date);
 
   useEffect(() => {
     if (!open) return;
@@ -48,15 +51,39 @@ export function MarkEditAttendanceDialog({ open, onOpenChange, employees, date, 
     setOvertime(String(existingRecord?.overtime ?? 0));
     setRemarks(existingRecord?.remarks ?? "");
     setReason("");
+    setFromDate(date);
+    setToDate(date);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, existingRecord, fixedEmployeeId]);
+  }, [open, existingRecord, fixedEmployeeId, date]);
 
   const employee = employees.find((e) => e.id === employeeId);
 
   async function handleSave() {
-    if (!employee || !reason.trim()) {
-      toast.error("Reason for manual change is required.");
+    if (!employee) {
+      toast.error("Select an employee.");
       return;
+    }
+    if (existingRecord && !reason.trim()) {
+      toast.error("Enter a reason for correcting this attendance record.");
+      return;
+    }
+    if ([workHours, overtime].some(value => !Number.isFinite(Number(value)) || Number(value) < 0 || Number(value) > 24)) {
+      toast.error("Working hours and overtime must be between 0 and 24.");
+      return;
+    }
+    const entryDates: string[] = [];
+    if (!existingRecord) {
+      if (!fromDate || !toDate || fromDate > toDate || fromDate.slice(0,7) !== toDate.slice(0,7)) {
+        toast.error("Select a valid date range within one month.");return;
+      }
+      if (fromDate < employee.joiningDate || (employee.exitDate && toDate > employee.exitDate)) {
+        toast.error("Select dates within this employee’s employment period.");return;
+      }
+      if (toDate > companyToday()) { toast.error("Record actual attendance through today. Future dates cannot be marked here.");return; }
+      const cursor = new Date(`${fromDate}T00:00:00Z`);
+      while (cursor.toISOString().slice(0,10) <= toDate) {
+        entryDates.push(cursor.toISOString().slice(0,10));cursor.setUTCDate(cursor.getUTCDate()+1);
+      }
     }
     setSubmitting(true);
     try {
@@ -64,7 +91,7 @@ export function MarkEditAttendanceDialog({ open, onOpenChange, employees, date, 
         id: existingRecord?.id ?? `${employee.id}-${date}`,
         employeeId: employee.id,
         date,
-        shift: existingRecord?.shift ?? "09:30 – 18:30",
+        shift: existingRecord?.shift ?? "",
         checkIn,
         checkOut,
         workHours: Number(workHours) || 0,
@@ -74,10 +101,13 @@ export function MarkEditAttendanceDialog({ open, onOpenChange, employees, date, 
         remarks,
         source: existingRecord?.source ?? "Manual",
       };
-      await updateAttendance(record, reason);
+      if (existingRecord) await updateAttendance(record, reason);
+      else await createAttendance(entryDates.map(entryDate=>({...record,date:entryDate})));
       toast.success(`Attendance ${existingRecord ? "updated" : "marked"} for ${employee.fullName}`);
       onDone();
       onOpenChange(false);
+    } catch(error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to save attendance.');
     } finally {
       setSubmitting(false);
     }
@@ -92,6 +122,13 @@ export function MarkEditAttendanceDialog({ open, onOpenChange, employees, date, 
         </DialogHeader>
 
         <div className="space-y-4">
+          {!existingRecord && <div className="space-y-1.5">
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label htmlFor="attendanceFrom">From Date</Label><Input id="attendanceFrom" type="date" value={fromDate} min={employee?.joiningDate} max={companyToday()} onChange={event=>{setFromDate(event.target.value);if(event.target.value>toDate)setToDate(event.target.value);}} /></div>
+              <div><Label htmlFor="attendanceTo">To Date</Label><Input id="attendanceTo" type="date" value={toDate} min={fromDate} max={companyToday()} onChange={event=>setToDate(event.target.value)} /></div>
+            </div>
+            <p className="text-xs text-muted-foreground">The selected status applies to every date in this range. Record weekly offs and holidays separately. Existing entries will not be overwritten.</p>
+          </div>}
           <div className="space-y-1.5">
             <Label>Employee</Label>
             <Select value={employeeId} onValueChange={(v) => v && setEmployeeId(v)} disabled={!!fixedEmployeeId || !!existingRecord}>
@@ -158,12 +195,12 @@ export function MarkEditAttendanceDialog({ open, onOpenChange, employees, date, 
             <Textarea id="remarks" value={remarks} onChange={(e) => setRemarks(e.target.value)} rows={2} />
           </div>
 
-          <div className="space-y-1.5 rounded-lg border border-amber-200 bg-amber-50 p-3">
+          {existingRecord && <div className="space-y-1.5 rounded-lg border border-amber-200 bg-amber-50 p-3">
             <Label htmlFor="reason" className="text-warning">
-              Reason for Manual Change <span className="text-danger">*</span>
+              Reason for Correction <span className="text-danger">*</span>
             </Label>
             <Textarea id="reason" value={reason} onChange={(e) => setReason(e.target.value)} rows={2} placeholder="Required for the audit trail" className="bg-white" />
-          </div>
+          </div>}
 
           {existingRecord?.modifiedBy && (
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">

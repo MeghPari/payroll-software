@@ -10,11 +10,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { getSalaryStructures } from "@/services/payroll.service";
 import { updateSalaryProfile } from "@/services/salary.service";
 import { calculatePayrollPreview } from "@/services/payroll.service";
-import { CURRENT_PAYROLL_MONTH } from "@/data/mock/attendance";
+import { companyToday,monthLabel } from '@/domain/dates';
+const CURRENT_PAYROLL_MONTH=monthLabel(companyToday().slice(0,7));
 import { formatINR } from "@/utils/format";
 import type { Employee, PayrollCalculation, SalaryProfile, SalaryStructure } from "@/types";
 import { toast } from "sonner";
 import { Save } from "lucide-react";
+import{permitted}from '@/lib/tenant-api';
 
 interface SalaryPanelProps {
   employee: Employee;
@@ -47,7 +49,7 @@ export function SalaryPanel({ employee, salary, onChanged }: SalaryPanelProps) {
   const [calc, setCalc] = useState<PayrollCalculation | undefined>(undefined);
 
   useEffect(() => {
-    getSalaryStructures().then(setStructures);
+    getSalaryStructures().then(setStructures).catch(error=>toast.error(error instanceof Error?error.message:'Unable to load structures.'));
   }, []);
 
   useEffect(() => {
@@ -55,11 +57,11 @@ export function SalaryPanel({ employee, salary, onChanged }: SalaryPanelProps) {
     // the initial async fetch resolves, or after a save round-trips through
     // the parent. Deliberate one-way sync, not a derived-state anti-pattern.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setForm(salary);
-  }, [salary]);
+    setForm(salary??{employeeId:employee.id,effectiveFrom:companyToday(),structure:'',basic:0,hra:0,special:0,conveyance:0,other:0,bonus:0,variable:0,loan:0,advance:0,otherDeduction:0,employerOther:0});
+  }, [salary,employee.id]);
 
   useEffect(() => {
-    calculatePayrollPreview(employee.id, CURRENT_PAYROLL_MONTH).then(setCalc);
+    calculatePayrollPreview(employee.id, CURRENT_PAYROLL_MONTH).then(setCalc).catch(error=>toast.error(error instanceof Error?error.message:'Payroll preview is unavailable.'));
   }, [employee.id, salary]);
 
   if (!form) return <Skeleton className="h-64 w-full" />;
@@ -77,7 +79,7 @@ export function SalaryPanel({ employee, salary, onChanged }: SalaryPanelProps) {
       await updateSalaryProfile(employee.id, form);
       toast.success("Salary profile updated", { description: "A new salary revision has been recorded if the gross amount changed." });
       onChanged();
-    } finally {
+    } catch(error) {toast.error(error instanceof Error?error.message:'Unable to save salary.');} finally {
       setSaving(false);
     }
   }
@@ -141,7 +143,7 @@ export function SalaryPanel({ employee, salary, onChanged }: SalaryPanelProps) {
         </SectionCard>
 
         <div className="flex justify-end">
-          <Button onClick={handleSave} disabled={saving} className="gap-1.5">
+          <Button onClick={handleSave} disabled={saving||!permitted('salary.write')} className="gap-1.5">
             <Save className="h-4 w-4" /> {saving ? "Saving..." : "Save Salary Profile"}
           </Button>
         </div>
@@ -150,7 +152,7 @@ export function SalaryPanel({ employee, salary, onChanged }: SalaryPanelProps) {
       <div className="space-y-4">
         <SectionCard title="Summary" subtitle={CURRENT_PAYROLL_MONTH}>
           <ReadRow label="Monthly Gross" value={formatINR(grossEarnings)} />
-          <ReadRow label="Annual CTC" value={formatINR(grossEarnings * 12)} />
+          <ReadRow label="Annual Gross (before employer contributions)" value={formatINR(grossEarnings * 12)} />
           {calc && (
             <>
               <div className="my-2 h-px bg-border" />

@@ -10,9 +10,12 @@ import { FilterSelect } from "@/components/shared/filter-select";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { DataTable } from "@/components/shared/data-table";
 import { Button } from "@/components/ui/button";
-import { getLedgers } from "@/services/accounting.service";
+import { getChartOfAccounts } from "@/services/accounting.service";
+import { AccountDialog } from '@/components/accounting/account-dialog';
+import { useSessionStore } from '@/store/session-store';
+import { permitted } from '@/lib/tenant-api';
 import { formatINR } from "@/utils/format";
-import type { AccountType, Ledger } from "@/types";
+import type { AccountType, AccountGroup, Ledger } from "@/types";
 import { toast } from "sonner";
 
 const typeTone: Record<AccountType, "info" | "danger" | "success" | "warning" | "purple"> = {
@@ -24,17 +27,25 @@ const typeTone: Record<AccountType, "info" | "danger" | "success" | "warning" | 
 };
 
 export default function LedgersPage() {
+  const companyId=useSessionStore(state=>state.companyId);
+  return <LedgersContent key={companyId}/>;
+}
+function LedgersContent() {
   const [ledgers, setLedgers] = useState<Ledger[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [type, setType] = useState("All");
+  const [groups,setGroups]=useState<AccountGroup[]>([]),[dialog,setDialog]=useState(false),[revision,setRevision]=useState(0);
 
   useEffect(() => {
-    getLedgers().then((data) => {
-      setLedgers(data);
+    let cancelled=false;
+    getChartOfAccounts().then((data) => {
+      if(cancelled)return;
+      setLedgers(data.ledgers);setGroups(data.groups);
       setLoading(false);
-    });
-  }, []);
+    }).catch(error=>{if(!cancelled){setLoading(false);toast.error(error instanceof Error?error.message:'Unable to load ledgers.');}});
+    return()=>{cancelled=true;};
+  }, [revision]);
 
   const filtered = ledgers.filter((l) => {
     if (search && !l.name.toLowerCase().includes(search.toLowerCase()) && !l.code.includes(search)) return false;
@@ -56,7 +67,7 @@ export default function LedgersPage() {
         title="Ledgers"
         subtitle="View and manage all general ledger accounts."
         actions={
-          <Button className="gap-1.5" onClick={() => toast.info("Add Ledger — coming soon")}>
+          <Button className="gap-1.5" disabled={!permitted('accounting.write')} onClick={() => setDialog(true)}>
             <Plus className="h-4 w-4" /> Add Ledger
           </Button>
         }
@@ -68,6 +79,7 @@ export default function LedgersPage() {
         </div>
         <DataTable columns={columns} data={filtered} loading={loading} pageSize={12} />
       </SectionCard>
+      <AccountDialog kind={dialog?'ledger':null} groups={groups} onClose={()=>setDialog(false)} onSaved={()=>setRevision(value=>value+1)}/>
     </div>
   );
 }

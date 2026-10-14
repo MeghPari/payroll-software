@@ -1,98 +1,37 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { Percent, FileCheck2, CalendarClock, Download } from "lucide-react";
-import { PageHeader } from "@/components/shared/page-header";
-import { SectionCard } from "@/components/shared/section-card";
-import { ChartCard } from "@/components/shared/chart-card";
-import { StatCard } from "@/components/shared/stat-card";
-import { StatusBadge } from "@/components/shared/status-badge";
-import { DonutChart, DonutLegend } from "@/components/shared/charts/donut-chart";
-import { Button } from "@/components/ui/button";
-import { getGstSummary } from "@/services/accounting.service";
-import { formatINR } from "@/utils/format";
-import type { GstSummary } from "@/types";
-
-const returns = [
-  { id: "r1", period: "April 2026", type: "GSTR-1", dueDate: "11 May 2026", status: "Completed" },
-  { id: "r2", period: "April 2026", type: "GSTR-3B", dueDate: "20 May 2026", status: "Completed" },
-  { id: "r3", period: "May 2026", type: "GSTR-1", dueDate: "11 Jun 2026", status: "Pending" },
-  { id: "r4", period: "May 2026", type: "GSTR-3B", dueDate: "20 Jun 2026", status: "Pending" },
-];
-
-export default function GstPage() {
-  const [summary, setSummary] = useState<GstSummary | null>(null);
-
-  useEffect(() => {
-    getGstSummary().then(setSummary);
-  }, []);
-
-  const total = summary ? summary.cgst + summary.sgst + summary.igst + summary.cess : 0;
-  const donutData = summary
-    ? [
-        { name: "CGST", value: summary.cgst, color: "#1769E0" },
-        { name: "SGST", value: summary.sgst, color: "#22A06B" },
-        { name: "IGST", value: summary.igst, color: "#D99823" },
-        { name: "Cess", value: summary.cess, color: "#7C5CFC" },
-      ].filter((d) => d.value > 0)
-    : [];
-
-  return (
-    <div>
-      <PageHeader title="GST" subtitle="Summary of GST liability, input credits and return filing status." />
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard icon={Percent} tone="amber" label="GST Payable" value={formatINR(total)} helperText="Due 20 May 2026" />
-        <StatCard icon={FileCheck2} tone="green" label="Returns Filed" value="2 of 4" helperText="This quarter" />
-        <StatCard icon={CalendarClock} tone="red" label="Next Due Date" value="20 Jun 2026" helperText="GSTR-3B for May 2026" />
-      </div>
-
-      <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <ChartCard
-          title="GST Summary"
-          subtitle="May 2026"
-          className="lg:col-span-1"
-          legend={summary && <DonutLegend data={donutData} formatValue={(v) => formatINR(v, { compact: true })} />}
-        >
-          {!summary ? <div className="h-full w-full animate-pulse rounded-lg bg-muted" /> : <DonutChart data={donutData} centerLabel="Total GST" centerValue={formatINR(total, { compact: true })} />}
-        </ChartCard>
-
-        <SectionCard
-          title="Return Filing Status"
-          className="lg:col-span-2"
-          actions={
-            <Button variant="outline" size="sm" className="gap-1.5">
-              <Download className="h-4 w-4" /> Export
-            </Button>
-          }
-          noPadding
-        >
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 text-left text-xs font-semibold text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-2.5">Period</th>
-                  <th className="px-4 py-2.5">Return Type</th>
-                  <th className="px-4 py-2.5">Due Date</th>
-                  <th className="px-4 py-2.5">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {returns.map((r) => (
-                  <tr key={r.id} className="hover:bg-muted/30">
-                    <td className="px-4 py-3">{r.period}</td>
-                    <td className="px-4 py-3 font-medium text-foreground">{r.type}</td>
-                    <td className="px-4 py-3">{r.dueDate}</td>
-                    <td className="px-4 py-3">
-                      <StatusBadge status={r.status} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </SectionCard>
-      </div>
-    </div>
-  );
+'use client';
+import { GstReviewArchive } from '@/components/accounting/gst-review-archive';
+import { useEffect,useState } from 'react';
+import { Percent,FileCheck2,CalendarClock,Download } from 'lucide-react';
+import { PageHeader } from '@/components/shared/page-header';
+import { SectionCard } from '@/components/shared/section-card';
+import { ChartCard } from '@/components/shared/chart-card';
+import { StatCard } from '@/components/shared/stat-card';
+import { StatusBadge } from '@/components/shared/status-badge';
+import { DonutChart,DonutLegend } from '@/components/shared/charts/donut-chart';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog,DialogContent,DialogTitle } from '@/components/ui/dialog';
+import { tenantApi,permitted } from '@/lib/tenant-api';
+import { useSessionStore } from '@/store/session-store';
+import { companyToday } from '@/domain/dates';
+import { toMinor } from '@/domain/currency';
+import { downloadCSV } from '@/lib/csv';
+import { formatINR } from '@/utils/format';
+import type { GstReport,GstInvoice } from '@/domain/compliance';
+import { toast } from 'sonner';
+export default function GstPage(){const id=useSessionStore(state=>state.companyId);return <GstContent key={id}/>;}
+function GstContent(){
+ const[month,setMonth]=useState(companyToday().slice(0,7));return <><div className="mb-4"><Label htmlFor="gst-month">GST Period</Label><Input id="gst-month" type="month" value={month} className="w-48" onChange={event=>{if(event.target.value)setMonth(event.target.value);}}/></div><GstPeriod key={month} month={month}/></>;
+}
+function GstPeriod({month}:{month:string}){
+ const[data,setData]=useState<GstReport|null>(null),[error,setError]=useState(''),[revision,setRevision]=useState(0),[review,setReview]=useState<GstInvoice|null>(null);
+ useEffect(()=>{let cancelled=false;tenantApi<GstReport>('gst?month='+month).then(data=>{if(!cancelled){setData(data);setError('');}}).catch(error=>{if(!cancelled)setError(error instanceof Error?error.message:'Unable to load GST books.');});return()=>{cancelled=true;};},[month,revision]);
+ const total=data?data.cgst+data.sgst+data.igst:0,donut=data?[{name:'CGST',value:data.cgst,color:'#1769E0'},{name:'SGST',value:data.sgst,color:'#22A06B'},{name:'IGST',value:data.igst,color:'#D99823'}].filter(row=>row.value>0):[],next=data?.obligations.filter(row=>row.status==='Pending').sort((a,b)=>a.due_date.localeCompare(b.due_date))[0];
+ return <div><PageHeader title="GST" subtitle="Posted invoice tax, reviewed purchase credits and recorded filing evidence."/>{error&&<p role="alert" className="mb-4 text-destructive">{error}</p>}<div className="grid grid-cols-1 gap-4 sm:grid-cols-3"><StatCard icon={Percent} tone="amber" label="Sales GST in Books" value={data?formatINR(total):'Loading'} helperText="Not a statutory payable calculation"/><StatCard icon={FileCheck2} tone="green" label="Recorded GST Filings" value={data?String(data.obligations.filter(row=>row.status==='Recorded').length):'Loading'} helperText={month}/><StatCard icon={CalendarClock} tone="red" label="Next Configured Due Date" value={next?.due_date??(data?'Not configured':'Loading')} helperText={next?.label}/></div><div className="mt-5 grid gap-4 lg:grid-cols-3"><ChartCard title="Sales GST Summary" subtitle={month} className="lg:col-span-1" legend={data&&<DonutLegend data={donut} formatValue={value=>formatINR(value)}/>} >{data?(donut.length?<DonutChart data={donut} centerLabel="Sales GST" centerValue={formatINR(total)}/>:<p className="text-sm text-muted-foreground">No posted sales tax for this period.</p>):<p>Loading...</p>}</ChartCard><SectionCard title="Return Filing Evidence" className="lg:col-span-2" noPadding><table className="w-full text-sm"><thead><tr>{['Return','Due Date','Status','Reference'].map(label=><th key={label} className="p-3 text-left">{label}</th>)}</tr></thead><tbody>{data?.obligations.map(row=><tr key={row.id} className="border-t"><td className="p-3">{row.label}</td><td className="p-3">{row.due_date}</td><td className="p-3"><StatusBadge status={row.status}/></td><td className="p-3">{row.evidence_reference||'No evidence'}</td></tr>)}</tbody></table>{data&&!data.obligations.length&&<p className="p-4 text-muted-foreground">Configure reviewed GST obligations in Compliance.</p>}</SectionCard></div><SectionCard title="Purchase Credit Review" className="mt-5" subtitle="Purchase tax is not automatically eligible credit. Book postings and reversals follow their own dates. Credit values use the latest saved eligibility review, not an archived return. Cess and statutory return generation are not configured." actions={<Button variant="outline" disabled={!data} onClick={()=>{if(data)downloadCSV('gst-book-summary-'+month+'.csv',['Invoice','Kind','Date','Taxable INR','CGST INR','SGST INR','IGST INR','Reviewed Credit INR'],data.invoices.map(row=>[row.invoice_number,row.kind,row.date,Number(row.taxable_minor)/100,Number(row.cgst_minor)/100,Number(row.sgst_minor)/100,Number(row.igst_minor)/100,row.gst_credit_reviews?(Number(row.gst_credit_reviews.cgst_minor)+Number(row.gst_credit_reviews.sgst_minor)+Number(row.gst_credit_reviews.igst_minor))/100:'Not reviewed']));}}><Download className="mr-1 h-4 w-4"/>Export Books</Button>}><p className="mb-3 text-sm">Purchase Tax: {data?formatINR(data.purchaseTax):'Loading'} ? Reviewed Credit: {data?formatINR(data.reviewedCredit):'Loading'} ? Book Difference: {data?formatINR(data.bookBalance):'Loading'}</p><div className="space-y-3">{data?.invoices.filter(row=>row.kind==='Purchase').map(row=><div key={row.id} className="flex items-center justify-between rounded-md border p-3"><div><p className="text-sm font-medium">{row.invoice_number} ? {row.party_snapshot.name}</p><p className="text-xs text-muted-foreground">{row.gst_credit_reviews?.review_reference??'Eligibility not reviewed'}</p></div>{permitted('accounting.write')&&row.creditEditable&&<Button variant="outline" size="sm" onClick={()=>setReview(row)}>Review Credit</Button>}</div>)}</div></SectionCard><GstReviewArchive key={month} month={month}/>{review&&<CreditEditor key={review.id} invoice={review} onClose={()=>setReview(null)} onSaved={()=>{setReview(null);setRevision(value=>value+1);}}/>}</div>;
+}
+function CreditEditor({invoice,onClose,onSaved}:{invoice:GstInvoice;onClose:()=>void;onSaved:()=>void}){
+ const[amounts,setAmounts]=useState({cgstMinor:String(Number(invoice.gst_credit_reviews?.cgst_minor??0)/100),sgstMinor:String(Number(invoice.gst_credit_reviews?.sgst_minor??0)/100),igstMinor:String(Number(invoice.gst_credit_reviews?.igst_minor??0)/100)}),[reference,setReference]=useState(''),[busy,setBusy]=useState(false);
+ async function save(){setBusy(true);try{await tenantApi('gst',{method:'POST',body:JSON.stringify({invoiceId:invoice.id,expectedVersion:invoice.gst_credit_reviews?.version??0,cgstMinor:toMinor(amounts.cgstMinor),sgstMinor:toMinor(amounts.sgstMinor),igstMinor:toMinor(amounts.igstMinor),reviewReference:reference})});toast.success('Purchase credit review saved');onSaved();}catch(error){toast.error(error instanceof Error?error.message:'Review failed.');}finally{setBusy(false);}}
+ return <Dialog open onOpenChange={open=>{if(!open&&!busy)onClose();}}><DialogContent><DialogTitle>Review Credit ? {invoice.invoice_number}</DialogTitle><form className="space-y-4" onSubmit={event=>{event.preventDefault();void save();}}>{(['cgstMinor','sgstMinor','igstMinor']as const).map(field=><div key={field}><Label htmlFor={field}>{field.slice(0,-5).toUpperCase()} Eligible Credit (INR)</Label><Input id={field} value={amounts[field]} required inputMode="decimal" onChange={event=>setAmounts({...amounts,[field]:event.target.value})}/></div>)}<Label htmlFor="credit-reference">Eligibility Review / Evidence Reference</Label><Input id="credit-reference" value={reference} required maxLength={1000} onChange={event=>setReference(event.target.value)}/><Button type="submit" disabled={busy}>Save Reviewed Credit</Button></form></DialogContent></Dialog>;
 }

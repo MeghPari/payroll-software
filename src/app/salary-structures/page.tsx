@@ -1,4 +1,5 @@
 "use client";
+import { useSessionStore } from '@/store/session-store';
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -21,7 +22,12 @@ import { getSalaryStructures } from "@/services/payroll.service";
 import { getEmployees } from "@/services/employee.service";
 import { getSalaryRevisions } from "@/services/salary.service";
 import { BulkUploadSalaryDialog } from "@/components/salary/bulk-upload-salary-dialog";
-import { useOperations, grossOf } from "@/store/operations-store";
+import {grossOf}from '@/store/operations-store';
+import{StructureDialog}from '@/components/salary/structure-dialog';
+import{getSalaryProfile}from '@/services/salary.service';
+import{createSalaryStructure}from '@/services/salary-structure.service';
+import{permitted}from '@/lib/tenant-api';
+import{useRouter}from 'next/navigation';
 import type { Employee, SalaryRevision, SalaryStructure } from "@/types";
 import { cn } from "@/lib/utils";
 import { formatINR, pluralize } from "@/utils/format";
@@ -37,7 +43,8 @@ function formatComponentValue(component: SalaryStructure["earnings"][number]) {
   return "-";
 }
 
-export default function SalaryStructuresPage() {
+export default function SalaryStructuresPage(){const id=useSessionStore(state=>state.companyId);return <SalaryStructuresPageTenantContent key={id}/>;}
+function SalaryStructuresPageTenantContent() {
   const [structures, setStructures] = useState<SalaryStructure[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [revisions, setRevisions] = useState<SalaryRevision[]>([]);
@@ -45,6 +52,8 @@ export default function SalaryStructuresPage() {
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [bulkUploadOpen, setBulkUploadOpen] = useState(false);
+  const[dialogOpen,setDialogOpen]=useState(false),[editing,setEditing]=useState<SalaryStructure|null>(null),[employeeSalaries,setEmployeeSalaries]=useState<Record<string,{structure:string;gross:number}>>({});
+  const router=useRouter();
 
   function refresh() {
     Promise.all([getSalaryStructures(), getEmployees(), getSalaryRevisions()]).then(([data, emp, rev]) => {
@@ -53,7 +62,8 @@ export default function SalaryStructuresPage() {
       setRevisions(rev);
       setSelectedId((prev) => prev ?? data[0]?.id ?? null);
       setLoading(false);
-    });
+      Promise.all(emp.map(async e=>{const profile=await getSalaryProfile(e.id);return [e.id,{structure:profile?.structure??'',gross:profile?grossOf(profile):0}]as const;})).then(values=>setEmployeeSalaries(Object.fromEntries(values))).catch(error=>toast.error(error instanceof Error?error.message:'Unable to load assignments.'));
+    }).catch(error=>{setLoading(false);toast.error(error instanceof Error?error.message:'Unable to load salary structures.');});
   }
 
   useEffect(() => {
@@ -65,11 +75,10 @@ export default function SalaryStructuresPage() {
 
   const employeesOnStructure = useMemo(() => {
     if (!selected) return [];
-    const salaries = useOperations.getState().salaries;
     return employees
-      .filter((e) => e.salaryStructureId === selected.id)
-      .map((e) => ({ employee: e, gross: salaries[e.id] ? grossOf(salaries[e.id]) : Math.round(e.ctc / 12) }));
-  }, [employees, selected]);
+      .filter((e) => employeeSalaries[e.id]?.structure===selected.name)
+      .map((e) => ({ employee: e, gross: employeeSalaries[e.id].gross }));
+  }, [employees, selected,employeeSalaries]);
 
   const kpis = {
     total: structures.length,
@@ -80,6 +89,7 @@ export default function SalaryStructuresPage() {
 
   return (
     <div>
+      <StructureDialog open={dialogOpen}onOpenChange={setDialogOpen}structure={editing}onSaved={refresh}/>
       <PageHeader
         title="Salary Structures"
         subtitle="Create, manage and assign salary structures for your organization."
@@ -88,7 +98,7 @@ export default function SalaryStructuresPage() {
             <Button variant="outline" className="gap-1.5" onClick={() => setBulkUploadOpen(true)}>
               <Upload className="h-4 w-4" /> Bulk Upload Salary
             </Button>
-            <Button className="gap-1.5" onClick={() => toast.info("Create Structure — form coming soon")}>
+            <Button className="gap-1.5" disabled={!permitted('salary.write')} onClick={() => {setEditing(null);setDialogOpen(true);}}>
               <Plus className="h-4 w-4" /> Create Structure
             </Button>
           </>
@@ -156,10 +166,10 @@ export default function SalaryStructuresPage() {
                   <p className="mt-1 text-xs text-muted-foreground">{pluralize(selected.employeeCount, "employee")} assigned · {selected.frequency}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" className="gap-1.5" onClick={() => toast.info("Assign to Employees — coming soon")}>
+                  <Button variant="outline" size="sm" className="gap-1.5" onClick={() => router.push('/employees')}>
                     <Users className="h-3.5 w-3.5" /> Assign to Employees
                   </Button>
-                  <Button variant="outline" size="sm" className="gap-1.5" onClick={() => toast.info("Preview Salary Slip — coming soon")}>
+                  <Button variant="outline" size="sm" className="gap-1.5" onClick={() => router.push('/payslips')}>
                     <Eye className="h-3.5 w-3.5" /> Preview Salary Slip
                   </Button>
                   <DropdownMenu>
@@ -167,10 +177,10 @@ export default function SalaryStructuresPage() {
                       <MoreVertical className="h-4 w-4" />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => toast.info("Edit structure — coming soon")}>
+                      <DropdownMenuItem onClick={() => {setEditing(selected);setDialogOpen(true);}}>
                         <Pencil className="h-4 w-4" /> Edit Structure
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => toast.info("Structure duplicated")}>
+                      <DropdownMenuItem onClick={async () => {try{await createSalaryStructure({...selected,name:`${selected.name} copy`,status:'Draft'});toast.success('Structure duplicated');refresh();}catch(error){toast.error(error instanceof Error?error.message:'Unable to duplicate structure.');}}}>
                         <Copy className="h-4 w-4" /> Duplicate
                       </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -182,13 +192,13 @@ export default function SalaryStructuresPage() {
                 <ComponentTable
                   title="Earnings"
                   components={selected.earnings}
-                  onAdd={() => toast.info("Add Earning — coming soon")}
+                  onAdd={() => toast.info('Standard earnings are included. Set employee-specific amounts under Salary.')}
                   addLabel="Add Earning"
                 />
                 <ComponentTable
                   title="Deductions"
                   components={selected.deductions}
-                  onAdd={() => toast.info("Add Deduction — coming soon")}
+                  onAdd={() => toast.info('Standard deductions are included. Configure statutory rules separately.')}
                   addLabel="Add Deduction"
                 />
 
@@ -234,8 +244,8 @@ export default function SalaryStructuresPage() {
               </div>
 
               <div className="flex justify-end gap-2 border-t border-border p-4">
-                <Button variant="outline">Cancel</Button>
-                <Button className="gap-1.5" onClick={() => toast.success("Salary structure saved")}>
+                <Button variant="outline"onClick={refresh}>Refresh</Button>
+                <Button className="gap-1.5" disabled={!permitted('salary.write')} onClick={() => {setEditing(selected);setDialogOpen(true);}}>
                   <Save className="h-4 w-4" /> Save Structure
                 </Button>
               </div>

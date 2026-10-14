@@ -1,0 +1,68 @@
+begin;
+insert into auth.users(id,email,email_confirmed_at)values('51000000-0000-4000-8000-000000000001','docs-admin@example.invalid',now()),('51000000-0000-4000-8000-000000000002','docs-employee@example.invalid',now()),('51000000-0000-4000-8000-000000000003','docs-finance@example.invalid',now());
+insert into public.user_profiles(id)select id from auth.users where id::text like '51000000%';
+insert into public.companies(id,name)values('52000000-0000-4000-8000-000000000001','Private documents fixture'),('52000000-0000-4000-8000-000000000002','Other company fixture');
+insert into public.user_company_roles(company_id,user_id,role)values('52000000-0000-4000-8000-000000000001','51000000-0000-4000-8000-000000000001','Super Admin'),('52000000-0000-4000-8000-000000000001','51000000-0000-4000-8000-000000000002','Employee'),('52000000-0000-4000-8000-000000000001','51000000-0000-4000-8000-000000000003','Finance');
+insert into public.employees(id,company_id,user_id,employee_code,first_name,last_name,email,joining_date)values('53000000-0000-4000-8000-000000000001','52000000-0000-4000-8000-000000000001','51000000-0000-4000-8000-000000000002','DOC01','Private','Employee','employee@example.invalid','2026-09-01');
+select set_config('request.jwt.claim.sub','51000000-0000-4000-8000-000000000001',true);set local role authenticated;
+do $$declare c uuid:='52000000-0000-4000-8000-000000000001';e uuid:='53000000-0000-4000-8000-000000000001';d uuid;p text;begin
+ perform public.save_employee_personal(c,e,1,'{"personalEmail":"personal@example.invalid","dateOfBirth":"1990-01-01","gender":"Other","bloodGroup":"O+","maritalStatus":"Single","address":"Fixture address","city":"Fixture city","pincode":"123456","nationality":"Indian","languages":["Hindi","English"],"emergencyContact":{"name":"Contact","phone":"1234567890"}}');
+ if(select version from public.employees where id=e)<>2 or(select blood_group from public.employee_private_details where employee_id=e)<>'O+'then raise exception 'FAIL personal save';end if;
+ begin perform public.save_employee_personal(c,e,1,'{}');raise exception 'FAIL stale personal edit';exception when serialization_failure then null;end;
+ begin perform public.save_employee_personal(c,e,2,'{"dateOfBirth":"2999-01-01"}');raise exception 'FAIL future DOB';exception when invalid_parameter_value then null;end;
+ d:=public.reserve_employee_document(c,e,jsonb_build_object('documentType','PAN Card','fileName','private.pdf','mimeType','application/pdf','byteSize',17,'sha256',repeat('a',64)));
+ select object_path into p from public.employee_documents where id=d;
+ if public.document_object_allowed(p,'read')is not true or public.document_object_allowed('unreserved/path','insert')then raise exception 'FAIL upload policy';end if;
+ begin perform public.finish_employee_document(c,d);raise exception 'FAIL missing object accepted';exception when check_violation then null;end;
+ insert into storage.objects(bucket_id,name,metadata)values('employee-documents',p,'{"size":17}');
+ perform public.finish_employee_document(c,d);
+ if public.document_object_allowed(p,'insert')then raise exception 'FAIL overwrite allowed';end if;
+ begin insert into storage.objects(bucket_id,name,metadata)values('employee-documents','unreserved/path','{"size":17}');raise exception 'FAIL unreserved upload';exception when insufficient_privilege then null;end;
+ perform public.review_employee_document(c,d,2,'Verified','Reviewed actual document fixture');
+ begin perform public.review_employee_document(c,d,2,'Rejected','stale');raise exception 'FAIL stale review';exception when serialization_failure then null;end;
+ begin perform public.reserve_employee_document('52000000-0000-4000-8000-000000000002',e,'{}');raise exception 'FAIL cross tenant reservation';exception when insufficient_privilege then null;end;
+end $$;
+reset role;
+select set_config('request.jwt.claim.sub','51000000-0000-4000-8000-000000000002',true);set local role authenticated;
+do $$declare c uuid:='52000000-0000-4000-8000-000000000001';e uuid:='53000000-0000-4000-8000-000000000001';begin
+ if(select count(*)from public.employee_documents)<>1 or(select count(*)from storage.objects)<>1 then raise exception 'FAIL own private access';end if;
+ perform public.record_private_download(c,'employee-document',(select id from public.employee_documents limit 1));
+ begin perform public.reserve_employee_document(c,e,'{}');raise exception 'FAIL employee unauthorized write';exception when insufficient_privilege then null;end;
+end $$;
+reset role;
+select set_config('request.jwt.claim.sub','51000000-0000-4000-8000-000000000003',true);set local role authenticated;
+do $$begin if(select count(*)from public.employee_documents)<>0 or(select count(*)from storage.objects)<>0 then raise exception 'FAIL Finance sensitive document access';end if;
+ begin perform public.record_private_download('52000000-0000-4000-8000-000000000001','employee-document','53000000-0000-4000-8000-000000000001');raise exception 'FAIL unauthorized download audit';exception when insufficient_privilege then null;end;
+end $$;
+reset role;
+select set_config('request.jwt.claim.sub','51000000-0000-4000-8000-000000000001',true);set local role authenticated;
+do $$declare d public.employee_documents;begin
+ select * into d from public.employee_documents limit 1;
+ perform public.review_employee_document(d.company_id,d.id,d.version,'Removed','Fixture removal');
+ delete from storage.objects where name=d.object_path;
+ if(select count(*)from storage.objects)<>0 then raise exception 'FAIL private object cleanup';end if;
+ if(select count(*)from public.employee_documents where status='Removed')<>1 then raise exception 'FAIL review history lost';end if;
+end $$;
+reset role;
+select set_config('request.jwt.claim.sub','51000000-0000-4000-8000-000000000002',true);set local role authenticated;
+do $$declare p text;begin select object_path into p from public.employee_documents limit 1;if public.document_object_allowed(p,'read')then raise exception 'FAIL removed file readable by employee';end if;end $$;
+reset role;
+do $$begin if(select public from storage.buckets where id='employee-documents')then raise exception 'FAIL public bucket';end if;end $$;
+select set_config('request.jwt.claim.sub','51000000-0000-4000-8000-000000000001',true);set local role authenticated;
+do $$declare c uuid:='52000000-0000-4000-8000-000000000001';e uuid:='53000000-0000-4000-8000-000000000001';v integer;begin
+ select version into v from public.employees where id=e;
+ begin perform public.link_employee_account(c,e,null,v,'');raise exception 'FAIL empty link reason';exception when invalid_parameter_value then null;end;
+ perform public.link_employee_account(c,e,null,v,'Remove fixture account link');
+ if(select user_id from public.employees where id=e)is not null then raise exception 'FAIL unlink';end if;
+ begin perform public.link_employee_account(c,e,'51000000-0000-4000-8000-000000000002',v,'Stale');raise exception 'FAIL stale account link';exception when serialization_failure then null;end;
+ begin perform public.link_employee_account(c,e,'51000000-0000-4000-8000-000000000099',v+1,'Unknown');raise exception 'FAIL unknown account link';exception when check_violation then null;end;
+ perform public.link_employee_account(c,e,'51000000-0000-4000-8000-000000000002',v+1,'Verified fixture employee account');
+ if(select user_id from public.employees where id=e)<>'51000000-0000-4000-8000-000000000002'::uuid then raise exception 'FAIL relink';end if;
+end $$;
+reset role;
+select set_config('request.jwt.claim.sub','51000000-0000-4000-8000-000000000002',true);set local role authenticated;
+do $$begin
+ begin perform public.link_employee_account('52000000-0000-4000-8000-000000000001','53000000-0000-4000-8000-000000000001',null,1,'Unauthorized');raise exception 'FAIL employee linking account';exception when insufficient_privilege then null;end;
+end $$;
+reset role;
+rollback;

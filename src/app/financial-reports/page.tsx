@@ -1,4 +1,5 @@
 "use client";
+import { CashFlowReviewPanel } from "@/components/accounting/cash-flow-review";
 
 import { useEffect, useState } from "react";
 import {
@@ -17,13 +18,20 @@ import { SectionCard } from "@/components/shared/section-card";
 import { ReportCard } from "@/components/shared/report-card";
 import { FilterSelect } from "@/components/shared/filter-select";
 import { Button } from "@/components/ui/button";
-import { getFinancialReports, getRecentReports, generateReport } from "@/services/report.service";
+import { getFinancialReports, availableFinancialReports, generateReport } from "@/services/report.service";
+import { ReportPreview } from '@/components/shared/report-preview';
+import { useSessionStore } from '@/store/session-store';
+import { companyToday,monthLabel,monthKey } from '@/domain/dates';
+import type { ReportTable } from '@/domain/accounting-reports';
 import type { FinancialReport, RecentReport, ReportIconKey } from "@/types";
 import { payrollMonths } from "@/store/app-store";
 import { toast } from "sonner";
 import type { StatTone } from "@/components/shared/stat-card";
 
 const iconMap: Record<ReportIconKey, { icon: typeof Scale; tone: StatTone }> = {
+  "cash-flow": {icon:TrendingUp,tone:"cyan"},
+  "receivables-aging": {icon:Wallet,tone:"green"},
+  "payables-aging": {icon:Landmark,tone:"amber"},
   "trial-balance": { icon: Scale, tone: "blue" },
   "profit-loss": { icon: TrendingUp, tone: "green" },
   "balance-sheet": { icon: PieChartIcon, tone: "purple" },
@@ -35,25 +43,26 @@ const iconMap: Record<ReportIconKey, { icon: typeof Scale; tone: StatTone }> = {
 };
 
 export default function FinancialReportsPage() {
+  const companyId=useSessionStore(state=>state.companyId);
+  return <FinancialReportsContent key={companyId}/>;
+}
+function FinancialReportsContent() {
   const [reports, setReports] = useState<FinancialReport[]>([]);
   const [recent, setRecent] = useState<RecentReport[]>([]);
-  const [dateRange, setDateRange] = useState(payrollMonths[payrollMonths.length - 1]);
+  const [dateRange, setDateRange] = useState(()=>monthLabel(companyToday().slice(0,7)));
   const [loading, setLoading] = useState(true);
+  const [preview,setPreview]=useState<ReportTable|null>(null),[busy,setBusy]=useState(false);
+  const [generated,setGenerated]=useState<Map<string,ReportTable>>(new Map());
 
   useEffect(() => {
-    Promise.all([getFinancialReports(), getRecentReports()]).then(([r, rr]) => {
+    getFinancialReports().then(r => {
       setReports(r);
-      setRecent(rr);
       setLoading(false);
     });
   }, []);
 
   async function handleView(report: FinancialReport) {
-    toast.promise(generateReport(report.key), {
-      loading: `Generating ${report.title}...`,
-      success: `${report.title} is ready to view.`,
-      error: "Something went wrong.",
-    });
+    setBusy(true);try{const table=await generateReport(report.key,dateRange);setPreview(table);const id=`${report.key}/${table.month}`;setGenerated(previous=>new Map(previous).set(id,table));setRecent(previous=>[{id,title:report.title,generatedOn:new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',dateStyle:'medium',timeStyle:'short'}).format(new Date()),status:'Ready' as const},...previous.filter(row=>row.id!==id)]);}catch(error){toast.error(error instanceof Error?error.message:'Unable to generate report.');}finally{setBusy(false);}
   }
 
   return (
@@ -64,7 +73,6 @@ export default function FinancialReportsPage() {
         actions={
           <div className="flex items-center gap-2">
             <FilterSelect value={dateRange} onChange={setDateRange} options={payrollMonths} placeholder="Date Range" className="w-44 bg-white" />
-            <FilterSelect value="All Books" onChange={() => {}} options={["All Books", "Company Books", "Payroll Books"]} className="w-40 bg-white" />
           </div>
         }
       />
@@ -81,13 +89,13 @@ export default function FinancialReportsPage() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
               {reports.map((r) => {
                 const { icon, tone } = iconMap[r.key];
-                return <ReportCard key={r.id} icon={icon} tone={tone} title={r.title} description={r.description} onView={() => handleView(r)} />;
+                return <ReportCard key={r.id} icon={icon} tone={tone} title={r.title} description={r.description} disabled={busy||!availableFinancialReports.has(r.key)} onView={() => handleView(r)} />;
               })}
             </div>
           )}
         </div>
 
-        <SectionCard title="Recent Reports" actions={<Button variant="ghost" size="sm" className="text-primary">View All</Button>} noPadding>
+        <SectionCard title="Generated This Session" subtitle="Reports generated here are available while this page remains open." noPadding>
           <div className="divide-y divide-border">
             {loading
               ? Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-14 animate-pulse bg-muted/50" />)
@@ -100,7 +108,7 @@ export default function FinancialReportsPage() {
                       <p className="truncate text-sm font-medium text-foreground">{r.title}</p>
                       <p className="text-xs text-muted-foreground">{r.generatedOn}</p>
                     </div>
-                    <Button variant="ghost" size="icon-sm" aria-label={`Download ${r.title}`} onClick={() => toast.info(`Downloading ${r.title}...`)}>
+                    <Button variant="ghost" size="icon-sm" aria-label={`View ${r.title}`} onClick={() => setPreview(generated.get(r.id)??null)}>
                       <Download className="h-3.5 w-3.5" />
                     </Button>
                   </div>
@@ -108,6 +116,7 @@ export default function FinancialReportsPage() {
           </div>
         </SectionCard>
       </div>
+      <CashFlowReviewPanel key={monthKey(dateRange)} month={monthKey(dateRange)}/><ReportPreview report={preview} onClose={()=>setPreview(null)}/>
     </div>
   );
 }
