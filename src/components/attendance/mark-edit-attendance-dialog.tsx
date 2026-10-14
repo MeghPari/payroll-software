@@ -130,10 +130,10 @@ export function MarkEditAttendanceDialog({ open, onOpenChange, employees, date, 
             <p className="text-xs text-muted-foreground">The selected status applies to every date in this range. Record weekly offs and holidays separately. Existing entries will not be overwritten.</p>
           </div>}
           <div className="space-y-1.5">
-            <Label>Employee</Label>
+            <Label htmlFor="attendance-employee">Employee</Label>
             <Select value={employeeId} onValueChange={(v) => v && setEmployeeId(v)} disabled={!!fixedEmployeeId || !!existingRecord}>
-              <SelectTrigger className="w-full">
-                <SelectValue />
+              <SelectTrigger id="attendance-employee" className="w-full">
+                <SelectValue>{employee ? `${employee.fullName} (${employee.employeeCode})` : 'Select an employee'}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {employees.map((e) => (
