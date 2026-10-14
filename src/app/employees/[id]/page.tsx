@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { Suspense,useCallback, useEffect, useState } from "react";
+import { useParams, useRouter,useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Ban, PlayCircle, RefreshCcw } from "lucide-react";
 import { EmployeeAvatar } from "@/components/shared/employee-avatar";
@@ -35,9 +35,11 @@ import { PayrollHistoryPanel } from "./payroll-history-panel";
 export default function EmployeeProfilePage() {
   const companyId=useSessionStore(state=>state.companyId);
   const params=useParams<{id:string}>();
-  return <EmployeeProfileContent key={`${companyId}/${params.id}`}/>;
+  return <Suspense fallback={<p role="status">Loading employee...</p>}><EmployeeProfileContent key={`${companyId}/${params.id}`}/></Suspense>;
 }
 function EmployeeProfileContent() {
+  const requestedTab=useSearchParams().get('tab')??'overview';
+  const initialTab=['overview','employment','salary','attendance','kyc','history'].includes(requestedTab)?requestedTab:'overview';
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const employeeId = params.id;
@@ -133,7 +135,7 @@ function EmployeeProfileContent() {
         )}
       </div>
 
-      <Tabs defaultValue="overview">
+      <Tabs key={initialTab} defaultValue={initialTab}>
         <TabsList className="flex-wrap h-auto">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="employment">Employment</TabsTrigger>

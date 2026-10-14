@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import ts from 'typescript';
 const out=new URL('../.test-output/payroll-views/',import.meta.url);await mkdir(out,{recursive:true});
-async function compile(path,name,replacements={}){let source=await readFile(new URL('../'+path,import.meta.url),'utf8');for(const [from,to]of Object.entries(replacements))source=source.replaceAll(from,to);await writeFile(new URL(name,out),ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.ESNext}}).outputText);}
+async function compile(path,name,replacements={}){let source=await readFile(new URL('../'+path,import.meta.url),'utf8');for(const [from,to]of Object.entries(replacements))source=source.replaceAll(from,to);await writeFile(new URL(name,out),ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX}}).outputText);}
 await compile('src/domain/dates.ts','dates.mjs');
 await compile('src/domain/attendance-import-date.ts','import-date.mjs');
 await compile('src/domain/daily-attendance-roster.ts','daily-roster.mjs');
@@ -45,3 +45,10 @@ try{
  console.log('PASS sample CSV parses into seven rows and passes the real attendance input schema after replacing its employee-code placeholder.');
  console.log('Read transports are fixtures. No live attendance or salary records were changed.');
 }finally{delete globalThis.viewFixture;}
+
+// Render actual blocker guidance with inert link/button transports.
+await writeFile(new URL('ui.mjs',out),"import{createElement}from 'react';export default function Link({href,children}){return createElement('a',{href},children)}export function Button({children}){return createElement('button',null,children)}");
+await compile('src/components/payroll/payroll-blockers.tsx','blockers.mjs',{'next/link':'./ui.mjs','@/components/ui/button':'./ui.mjs'});
+const React=await import('react'),{renderToStaticMarkup}=await import('react-dom/server'),{PayrollBlockers}=await import(new URL('blockers.mjs',out));
+const markup=renderToStaticMarkup(React.createElement(PayrollBlockers,{employees:[{id:'employee',fullName:'Fixture Name',employeeCode:'EMP1'}],issues:[...['No Salary Assigned','Missing Bank Details','Statutory Configuration'].map(check=>({employeeId:'employee',check,severity:'Blocking Error',message:'Fixture issue'})),{employeeId:'employee',check:'Passed',severity:'Passed',message:'hidden-passed-check'}],onReviewOvertime(){}}));
+assert.ok(markup.includes('Fixture Name (EMP1)'));assert.ok(markup.includes('/employees/employee?tab=salary'));assert.ok(markup.includes('/employees/employee?tab=kyc'));assert.ok(!markup.includes('hidden-passed-check'));console.log('PASS real payroll blocker component shows named issues and links salary/bank/statutory fixes to the correct employee tabs.');
