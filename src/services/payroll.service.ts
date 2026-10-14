@@ -1,4 +1,4 @@
-import { getPayrollRun,payrollAction,type PayrollSnapshot,type PayrollChecks } from './payroll-run.service';
+import { getPayrollRun,payrollAction,type PayrollSnapshot,type PayrollChecks,type PayrollRunData } from './payroll-run.service';
 import { companyToday } from '@/domain/dates';
 import { componentCodes } from './salary-structure.service';
 import type { PayrollCalculation,PayrollEligibility,PayrollException,PayrollExceptionType,PayrollPeriod,PayrollRun,PayrollStepStatus,SalaryProfile } from '@/types';
@@ -11,6 +11,8 @@ function calculation(row:PayrollSnapshot,month:string):PayrollCalculation{
  return{earningsBreakdown:Object.fromEntries(Object.entries(earn).map(([code,value])=>[code,value/100])),deductionBreakdown:Object.fromEntries(Object.entries(ded).map(([code,value])=>[code,value/100])),employeeId:row.employee_id,month,salary,attendance:snapshot.attendance,grossEarnings:snapshot.baselineGrossMinor/100,basic:e('basic'),hra:e('hra'),allowances:e('special')+e('conveyance')+e('other'),variablePay:e('bonus')+e('variable'),lopDeduction:(snapshot.baselineGrossMinor-row.gross_minor)/100,adjustedGross:row.gross_minor/100,pf:d('pf'),esi:d('esi'),pt:d('pt'),tds:d('tds'),otherDeductions:d('loan')+d('advance')+d('otherDeduction'),totalDeductions:row.deduction_minor/100,netPayable:row.net_minor/100,employerPF:c('pf'),employerESI:c('esi'),employerOther:c('employerOther'),totalEmployerCost:(row.gross_minor+row.employer_minor)/100,eligibility:'Eligible',status:'Ready'};
 }
 export async function getPayrollReview(month:string){return(await getPayrollRun(month)).snapshots.map(row=>calculation(row,month));}
+export function payrollReviewFromData(data:PayrollRunData,month:string){return data.snapshots.map(row=>calculation(row,month));}
+export function payrollPeriodFromData(data:PayrollRunData,month:string):PayrollPeriod{const run=data.run;return{month,version:run?.version,status:run?.status==='Calculated'?'Processed':run?.status??'Draft',attendanceFinalized:data.attendanceFinalized,validated:!!run&&run.status!=='Draft',approved:run?.status==='Approved'||run?.status==='Locked',published:data.workflow?.published??false,disbursed:data.workflow?.disbursed??false,posted:data.workflow?.posted??false,lockedOn:run?.locked_at??undefined};}
 export async function calculatePayrollPreview(employeeId:string,month:string){return(await getPayrollReview(month)).find(row=>row.employeeId===employeeId);}
 export function validatePayrollMonth(month:string){return payrollAction<PayrollValidationSummary>(month,'validate');}
 export async function recalculatePayrollMonth(month:string){await payrollAction(month,'calculate');return getPayrollReview(month);}

@@ -35,6 +35,8 @@ import { getDashboardOverview } from "@/services/dashboard.service";
 import { useSessionStore } from '@/store/session-store';
 import { formatINR } from "@/utils/format";
 import Link from "next/link";
+import { PayrollHome } from '@/components/payroll/payroll-home';
+import { permitted } from '@/lib/tenant-api';
 
 type Overview = Awaited<ReturnType<typeof getDashboardOverview>>;
 
@@ -53,7 +55,8 @@ const pendingActionIcons: Record<string, typeof CalendarClock> = {
 
 export default function DashboardPage() {
   const companyId=useSessionStore(state=>state.companyId);
-  return <DashboardContent key={companyId} />;
+  useSessionStore(state=>state.session);
+  return permitted('payroll.run') ? <PayrollHome key={companyId} /> : <DashboardContent key={companyId} />;
 }
 
 function DashboardContent() {

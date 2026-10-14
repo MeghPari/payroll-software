@@ -42,15 +42,20 @@ export interface NavGroup {
 
 export const navGroups: NavGroup[] = [
   {
-    label: "Payroll",
+    label: "Daily work",
     items: [
-      { label: "Dashboard", href: "/dashboard", icon: LayoutGrid },
+      { label: "Payroll Home", href: "/dashboard", icon: LayoutGrid },
+      { label: "Attendance", href: "/attendance", icon: CalendarCheck },
+      { label: "Calculate Salaries", href: "/payroll", icon: PlayCircle },
+      { label: "Salary Payments", href: "/disbursement", icon: Send },
+    ],
+  },
+  {
+    label: "Employees & reports",
+    items: [
       { label: "Employees", href: "/employees", icon: Users },
       { label: "Salary Structures", href: "/salary-structures", icon: Layers },
-      { label: "Attendance & Leave", href: "/attendance", icon: CalendarCheck },
-      { label: "Payroll Run", href: "/payroll", icon: PlayCircle },
       { label: "Payslips", href: "/payslips", icon: FileText },
-      { label: "Disbursement", href: "/disbursement", icon: Send },
       { label: "Compliance", href: "/compliance", icon: ShieldCheck },
       { label: "Payroll Reports", href: "/payroll-reports", icon: BarChart3 },
     ],

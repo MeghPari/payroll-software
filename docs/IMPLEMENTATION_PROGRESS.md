@@ -62,6 +62,12 @@ The user confirmed migrations 001-040 applied successfully, including supabase/u
 - An exact-half test exposed a one-paise error caused by dividing daily salary before summation. Migration 039 sums integer/half-day weighted amounts before dividing and rounding once, for both calendar and working-day modes. Half-up/down regression cases pass. Calculation-method provenance blocks approval of legacy unapproved calculations until recalculated.
 - Application calculation/approval requires migration 039 so the known older rounding method is not used through the app. Published/locked originals are not rewritten.
 
+## Attendance and salary experience update
+
+Implemented the research-led monthly workflow described in [payroll experience research](PAYROLL_EXPERIENCE_RESEARCH.md). Payroll Home shows saved monthly totals and the next action. Attendance opens on monthly review, highlights incomplete registers and provides an employee date editor using audited entry/correction. Salary review has a compact default table, explicit calculation and review/lock guidance; adjustments mount on demand. Salary Payments provides the confirmed payroll-entry step in place and shows recorded paid/remaining amounts. Attendance, salaries, payments and payslips share the top-bar month. Other menu groups collapse until needed.
+
+Salary loading now reuses one payroll response and the selected employee's captured calculation; monthly attendance reuses the loaded employee list. No database migration or live financial mutation is required. Build, TypeScript, lint, 36 domain checks, payroll/attendance view fixtures and 39 anonymous HTTP checks pass. These checks do not establish authenticated browser acceptance or a measured latency improvement. The user confirmed hosted login works after correcting the Supabase URL.
+
 ## Outstanding implementation and acceptance
 
 - Legal statutory filing formats and submission integrations. Archived GST book reviews are review records; they are not submitted returns.
@@ -72,7 +78,7 @@ The user confirmed migrations 001-040 applied successfully, including supabase/u
 
 ## Current verification
 
-All 40 individual migrations and the database workflow suites pass in embedded PostgreSQL with fixture Auth/Storage. The follow-up package preserves identities, verified bank details, locked payroll, published payslips, posted invoice/journal and partial payment fixtures exactly. Thirty-three domain checks and the real tenant/HTTP rate-limit integration test pass. Production build (88 routes/pages), TypeScript, lint, bundled PDF traces and all 39 anonymous HTTP/origin/redirect checks pass. Provider outage, cancellation, scoped local sign-out and real Next proxy fixture checks pass. Live authenticated verification remains pending.
+All 40 individual migrations and the database workflow suites pass in embedded PostgreSQL with fixture Auth/Storage. The follow-up package preserves identities, verified bank details, locked payroll, published payslips, posted invoice/journal and partial payment fixtures exactly. Thirty-six domain checks and the real tenant/HTTP rate-limit integration test pass. Production build (88 routes/pages), TypeScript, lint, bundled PDF traces and all 39 anonymous HTTP/origin/redirect checks pass. Provider outage, cancellation, scoped local sign-out and real Next proxy fixture checks pass. Live authenticated verification remains pending.
 
 See [test results](../TEST_RESULTS.md), [deployment instructions](DEPLOYMENT_GUIDE.md) and [payroll workflow](PAYROLL_WORKFLOW.md). Local fixture results do not establish production readiness.
 

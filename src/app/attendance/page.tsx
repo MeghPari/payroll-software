@@ -1,6 +1,9 @@
-﻿"use client";
-
-import { useEffect, useMemo, useState } from "react";
+"use client";
+import Link from 'next/link';
+import { MonthlyAttendanceEditor } from '@/components/attendance/monthly-attendance-editor';
+import { PayrollNavigation } from '@/components/payroll/payroll-navigation';
+import { useAppStore } from '@/store/app-store';
+﻿import { useEffect, useMemo, useState } from "react";
 import {
   Users,
   CheckCircle2,
@@ -56,7 +59,7 @@ import {
   type TodayAttendanceCounts,
 } from "@/services/attendance.service";
 import { getEmployees } from "@/services/employee.service";
-import { companyToday as today,monthKey as monthKeyFromLabel,monthLabel } from '@/domain/dates';
+import { companyToday as today,monthKey as monthKeyFromLabel } from '@/domain/dates';
 import { permitted } from '@/lib/tenant-api';
 import { useSessionStore } from '@/store/session-store';
 import { indianStates } from "@/store/operations-store";
@@ -75,7 +78,7 @@ export default function AttendancePage() {
 
 function AttendanceContent() {
   const companyId=useSessionStore(s=>s.companyId);
-  const [tab, setTab] = useState("today");
+  const [tab, setTab] = useState("register");
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -88,12 +91,13 @@ function AttendanceContent() {
 
   return (
     <div>
+      <PayrollNavigation/>
       <PageHeader title="Attendance & Leave" subtitle="Track daily attendance, manage leave requests and process monthly registers." />
 
       <Tabs value={tab} onValueChange={(v) => v && setTab(v)}>
         <TabsList variant="line" className="flex-wrap h-auto">
-          <TabsTrigger value="today">Today&apos;s Attendance</TabsTrigger>
-          <TabsTrigger value="register">Attendance Register</TabsTrigger>
+          <TabsTrigger value="today">Daily entry</TabsTrigger>
+          <TabsTrigger value="register">Monthly review</TabsTrigger>
           <TabsTrigger value="leave-requests">Leave Requests</TabsTrigger>
           <TabsTrigger value="leave-balance">Leave Balance</TabsTrigger>
           <TabsTrigger value="upload">Upload Attendance</TabsTrigger>
@@ -314,9 +318,10 @@ function TodayAttendanceTab({ employees, loading: employeesLoading }: { employee
 // Attendance Register (monthly)
 // ---------------------------------------------------------------------------
 
-function AttendanceRegisterTab({employees,loading}:{employees:Employee[];loading:boolean}){const[month,setMonth]=useState(()=>monthLabel(today().slice(0,7)));return <AttendanceRegisterPeriod key={month} month={month} setMonth={setMonth} employees={employees} loading={loading}/>;}
+function AttendanceRegisterTab({employees,loading}:{employees:Employee[];loading:boolean}){const month=useAppStore(s=>s.month),setMonth=useAppStore(s=>s.setMonth);return <AttendanceRegisterPeriod key={month} month={month} setMonth={setMonth} employees={employees} loading={loading}/>;}
 function AttendanceRegisterPeriod({employees,loading:employeesLoading,month,setMonth}:{employees:Employee[];loading:boolean;month:string;setMonth:(month:string)=>void}){
   const [markOpen, setMarkOpen] = useState(false);
+  const [reviewEmployee,setReviewEmployee]=useState<Employee|null>(null),[onlyMissing,setOnlyMissing]=useState(false),[allColumns,setAllColumns]=useState(false);
 
   const [rows, setRows] = useState<MonthlyRegisterRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -330,7 +335,7 @@ function AttendanceRegisterPeriod({employees,loading:employeesLoading,month,setM
 
   function refresh() {
     setLoading(true);
-    Promise.all([getMonthlyAttendanceRegister(monthKey), isAttendanceFinalized(monthKey)]).then(([r, f]) => {
+    Promise.all([getMonthlyAttendanceRegister(monthKey,employees), isAttendanceFinalized(monthKey)]).then(([r, f]) => {
       setRows(r);
       setFinalized(f);
       setLoading(false);
@@ -342,7 +347,7 @@ function AttendanceRegisterPeriod({employees,loading:employeesLoading,month,setM
     // eslint-disable-next-line react-hooks/set-state-in-effect
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [monthKey]);
+  }, [monthKey,employees]);
 
   async function handleFinalize() {
     setFinalizing(true);
@@ -374,6 +379,8 @@ function AttendanceRegisterPeriod({employees,loading:employeesLoading,month,setM
           "â€”"
         ),
     },
+    {id:'missing',header:'Dates to review',accessorFn:row=>row.summary.missing,cell:({row})=><span className={row.original.summary.missing?'font-semibold text-amber-700':'text-green-700'}>{row.original.summary.missing||'Complete'}</span>},
+    {id:'review',header:'Review / edit',cell:({row})=><Button variant="outline" size="sm" disabled={!row.original.employee} onClick={()=>setReviewEmployee(row.original.employee??null)}>View dates</Button>},
     { id: "present", header: "Present", accessorFn: (row) => row.summary.present },
     { id: "absent", header: "Absent", accessorFn: (row) => row.summary.absent },
     { id: "paidLeave", header: "Paid Leave", accessorFn: (row) => row.summary.paidLeave },
@@ -381,7 +388,6 @@ function AttendanceRegisterPeriod({employees,loading:employeesLoading,month,setM
     { id: "halfDays", header: "Half Days", accessorFn: (row) => row.summary.halfDays },
     { id: "weeklyOff", header: "Weekly Off", accessorFn: (row) => row.summary.weeklyOff },
     { id: "holidays", header: "Holidays", accessorFn: (row) => row.summary.holidays },
-    { id: "missing", header: "Incomplete Days", accessorFn: (row) => row.summary.missing, cell: ({row}) => <span className={row.original.summary.missing ? "font-semibold text-danger" : "text-success"}>{row.original.summary.missing}</span> },
     { id: "payableDays", header: "Payable Days", accessorFn: (row) => row.summary.payableDays, cell: ({ row }) => <span className="font-semibold text-foreground">{row.original.summary.payableDays}</span> },
     { id: "lopDays", header: "LOP Days", accessorFn: (row) => row.summary.lopDays, cell: ({ row }) => (row.original.summary.lopDays > 0 ? <span className="text-danger">{row.original.summary.lopDays}</span> : "0") },
   ];
@@ -410,21 +416,23 @@ function AttendanceRegisterPeriod({employees,loading:employeesLoading,month,setM
           size="sm"
           variant={finalized ? "outline" : "default"}
           className="gap-1.5"
-          disabled={!permitted(finalized?"payroll.unlock":"attendance.write")} onClick={async()=>{if(!finalized){setConfirmOpen(true);return;}const reason=window.prompt("Reason for reopening attendance");if(!reason?.trim())return;try{await reopenAttendance(monthKey,reason);refresh();}catch(error){toast.error(error instanceof Error?error.message:"Unable to reopen attendance.");}}}
+          disabled={loadingAll||finalizing||(!finalized&&(!rows.length||rows.some(row=>row.summary.missing>0)))||!permitted(finalized?"payroll.unlock":"attendance.write")} onClick={async()=>{if(!finalized){setConfirmOpen(true);return;}const reason=window.prompt("Reason for reopening attendance");if(!reason?.trim())return;try{await reopenAttendance(monthKey,reason);refresh();}catch(error){toast.error(error instanceof Error?error.message:"Unable to reopen attendance.");}}}
         >
           {finalized ? <LockOpen className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
           {finalized ? "Unlock (Admin)" : "Finalize Attendance"}
         </Button>
       </div>
 
+      <section className="mb-4 rounded-xl border bg-card p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">{month}: attendance review</h2><p className="mt-1 text-sm text-muted-foreground">{loadingAll?'Loading the monthly register...':rows.length?rows.filter(row=>row.summary.missing>0).length+' employee(s) have incomplete dates in the full month.':'No eligible employees in this month.'} Upcoming dates in the current month remain incomplete until recorded.</p></div><Button variant="outline" onClick={()=>setOnlyMissing(value=>!value)} aria-pressed={onlyMissing}>{onlyMissing?'Show everyone':'Show incomplete attendance'}</Button></div><div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">{[['Employees',rows.length],['Complete registers',rows.filter(row=>!row.summary.missing).length],['Payable days',rows.reduce((n,row)=>n+row.summary.payableDays,0)],['Loss-of-pay days',rows.reduce((n,row)=>n+row.summary.lopDays,0)]].map(([label,value])=><div key={label}><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 text-xl font-semibold">{loadingAll?'--':value}</p></div>)}</div>{finalized&&permitted('payroll.run')&&<Link href="/payroll" className="mt-4 inline-block text-sm font-semibold text-primary">Attendance ready. Continue to calculate salaries</Link>}</section>
+      {reviewEmployee&&<MonthlyAttendanceEditor key={reviewEmployee.id+monthKey} employee={reviewEmployee} month={monthKey} finalized={finalized} onClose={()=>setReviewEmployee(null)} onSaved={refresh}/>}
       {finalizationIssue?.month === monthKey && !finalized && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-danger">{finalizationIssue.message}</p>}
       <SectionCard
         title="Monthly Attendance Register"
         subtitle={month}
-        actions={<div className="flex flex-wrap gap-2"><Button variant="outline" disabled={finalized || !permitted('attendance.write')} onClick={()=>setMarkOpen(true)}>Mark Attendance</Button><FilterSelect value={month} onChange={setMonth} options={payrollMonths} className="w-44 bg-white" /></div>}
+        actions={<div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" onClick={()=>setAllColumns(value=>!value)} aria-pressed={allColumns}>{allColumns?'Simple view':'All attendance columns'}</Button><Button variant="outline" disabled={finalized || !permitted('attendance.write')} onClick={()=>setMarkOpen(true)}>Mark Attendance</Button><FilterSelect value={month} onChange={setMonth} options={payrollMonths} className="w-44 bg-white" /></div>}
         noPadding
       >
-        <DataTable columns={columns} data={data} loading={loadingAll} pageSize={10} />
+        <DataTable columns={allColumns?columns:columns.filter(column=>['employee','missing','review','present','payableDays','lopDays'].includes(column.id??''))} data={onlyMissing?data.filter(row=>row.summary.missing>0):data} loading={loadingAll} pageSize={10} />
       </SectionCard>
       {!finalized&&permitted('attendance.write')&&<Button variant="outline" disabled={loading||finalizing} onClick={async()=>{try{const result=await tenantApi<{affected:number}>('attendance/calendar',{method:'POST',body:JSON.stringify({kind:'apply',month:monthKey+'-01'})});toast.success('Created '+result.affected+' missing nonworking-day records');refresh();}catch(error){toast.error(error instanceof Error?error.message:'Unable to apply reviewed calendar.');}}}>Apply Reviewed Weekly Offs / Holidays</Button>}
       <MarkEditAttendanceDialog open={markOpen} onOpenChange={setMarkOpen} employees={employees.filter(employee=>!['Inactive','Salary Hold'].includes(employee.status)&&employee.joiningDate<=`${monthKey}-31`&&(!employee.exitDate||employee.exitDate>=`${monthKey}-01`))} date={`${monthKey}-01`} onDone={refresh} />

@@ -16,6 +16,7 @@ interface SalaryCalculationDrawerProps {
   month: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  savedCalculation?: PayrollCalculation;
 }
 
 function Row({ label, value, emphasis, negative }: { label: string; value: string; emphasis?: boolean; negative?: boolean }) {
@@ -38,19 +39,19 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-export function SalaryCalculationDrawer({ employee, month, open, onOpenChange }: SalaryCalculationDrawerProps) {
+export function SalaryCalculationDrawer({ employee, month, open, onOpenChange, savedCalculation }: SalaryCalculationDrawerProps) {
   const companyId=useSessionStore(state=>state.companyId);
   const [preview, setPreview] = useState<{key:string;calc?:PayrollCalculation;error?:string} | null>(null);
   const key=`${companyId}/${employee?.id}/${month}`;
-  const loading=preview?.key!==key;
-  const calc=preview?.key===key?preview.calc:undefined;
+  const loading=!savedCalculation&&preview?.key!==key;
+  const calc=savedCalculation??(preview?.key===key?preview.calc:undefined);
 
   useEffect(() => {
-    if (!open || !employee) return;
+    if (!open || !employee || savedCalculation) return;
     let cancelled=false;
     calculatePayrollPreview(employee.id, month).then(calc=>{if(!cancelled)setPreview({key,calc,error:calc?undefined:'No payroll calculation is saved for this employee and month. Calculate payroll first.'});}).catch(error=>{if(!cancelled)setPreview({key,error:error instanceof Error?error.message:'Unable to load the payroll calculation.'});});
     return()=>{cancelled=true;};
-  }, [open, employee, month, key]);
+  }, [open, employee, month, key, savedCalculation]);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>

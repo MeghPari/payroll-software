@@ -1,5 +1,5 @@
 "use client";
-
+import { useAppStore } from '@/store/app-store';
 import { useEffect, useMemo, useState } from "react";
 import type { Column } from "@/components/shared/data-table";
 import { Users, Wallet, Send, TrendingUp, FileDown, FileText, Mail, BellRing, RotateCcw, HelpCircle } from "lucide-react";
@@ -18,7 +18,7 @@ import { CardGridSkeleton } from "@/components/shared/loading-skeleton";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { getPayslips, payslipAction, downloadPayslip } from "@/services/payslip.service";
-import { companyToday,monthLabel } from '@/domain/dates';
+
 import { payrollMonths } from '@/store/app-store';
 import { useSessionStore } from '@/store/session-store';
 import { permitted } from '@/lib/tenant-api';
@@ -35,7 +35,7 @@ const statusColors: Record<PayslipStatus, string> = {
 };
 
 export default function PayslipsPage(){const id=useSessionStore(state=>state.companyId);return <PayslipsPageTenantContent key={id}/>;}
-function PayslipsPageTenantContent(){const[month,setMonth]=useState(()=>monthLabel(companyToday().slice(0,7)));return <PayslipsPagePeriodContent key={month} month={month} onMonthChange={setMonth}/>;}
+function PayslipsPageTenantContent(){const month=useAppStore(s=>s.month),setMonth=useAppStore(s=>s.setMonth);return <PayslipsPagePeriodContent key={month} month={month} onMonthChange={setMonth}/>;}
 function PayslipsPagePeriodContent({month,onMonthChange}:{month:string;onMonthChange:(month:string)=>void}){
  const setMonth=onMonthChange;
   const companyId=useSessionStore(s=>s.companyId);

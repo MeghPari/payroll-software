@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Wallet, X } from "lucide-react";
+import { Wallet, X, ChevronDown } from "lucide-react";
 import { navGroups } from "@/config/nav";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app-store";
@@ -22,10 +22,10 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
       <nav className="flex-1 overflow-y-auto scrollbar-thin px-3 pb-6" aria-label="Primary navigation">
         {navGroups.map((group) => (
-          <div key={group.label} className="mb-5">
-            <p className="px-3 pb-1.5 text-[10.5px] font-semibold tracking-wider text-sidebar-foreground/45">
-              {group.label.toUpperCase()}
-            </p>
+          <details key={group.label} className="mb-5" open={group.label==='Daily work'||group.items.some(item=>pathname===item.href)}>
+            <summary className="flex cursor-pointer list-none items-center justify-between px-3 pb-1.5 text-[10.5px] font-semibold tracking-wider text-sidebar-foreground/70">
+              {group.label.toUpperCase()}<ChevronDown className="h-3 w-3"/>
+            </summary>
             <ul className="space-y-0.5">
               {group.items.map((item) => {
                 const isActive = pathname === item.href || pathname?.startsWith(item.href + "/");
@@ -50,7 +50,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                 );
               })}
             </ul>
-          </div>
+          </details>
         ))}
       </nav>
     </div>

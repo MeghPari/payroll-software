@@ -3,7 +3,7 @@
 ## Passed locally
 
 - All 40 migrations execute in embedded PostgreSQL with fixture Auth and Storage metadata; database workflow suites pass.
-- Thirty-three domain checks cover exact payroll, attendance, imports, posted-ledger reports, historical aging, reconciled cash flow and request classification.
+- Thirty-six domain checks cover exact payroll, attendance, imports, posted-ledger reports, historical aging, reconciled cash flow, request classification and truthful next-step guidance.
 - Payroll regression cases cover exact half-paise ties in calendar/working-day modes, half-up/down rounding, captured source corrections, preserved published originals and rejection of legacy unapproved calculations until recalculated.
 - Cash-flow reviews enforce exact signed allocation, version/history immutability, tenant denial and zero-net internal-transfer exclusion. Salary evidence accepts actual within-month dates while rejecting pre-month/future dates.
 - Attendance Route Handlers and real tenant/HTTP helpers pass against PostgreSQL RPCs with fixture Auth/REST, including authorization, completeness, atomic audit, quotas and schema fallback.
@@ -13,6 +13,8 @@
 - Production build (88 routes/pages), TypeScript, lint and 39 anonymous HTTP/origin/redirect checks pass.
 
 ## Live status and limits
+
+Attendance/salary experience checks: production build, TypeScript and lint pass. All 39 anonymous HTTP checks pass. Read-fixture tests confirm shared payroll views retain captured paise, run versions and payment status without duplicate run reads; attendance preserves employment dates, half days and unresolved punches while reusing the supplied employee list. Authenticated browser/visual acceptance and measured latency remain unverified. The user confirmed the hosted login works after correcting SUPABASE_URL.
 
 Login-entry follow-up: provider/proxy regression checks, TypeScript and lint pass. Local GET /login renders email/password without dashboard navigation; anonymous / and /dashboard redirect to /login. Hosted /api/auth/session returned 503 BACKEND_NOT_CONFIGURED, so production environment setup remains required. Browser visual inspection was unavailable because the browser connection could not initialize.
 
