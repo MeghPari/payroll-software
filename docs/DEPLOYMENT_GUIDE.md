@@ -18,6 +18,8 @@ Create and confirm an Auth user, then bootstrap the first company in the privile
 
 ## Client access from multiple computers
 
+The deployed address is https://payroll-software-iota.vercel.app. Its session API returned BACKEND_NOT_CONFIGURED during the hosted check. Configure Production SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY and APP_URL in Vercel, with APP_URL set to that exact HTTPS origin. Redeploy after saving environment variables. The login entry fix redirects missing-configuration navigation to /login and removes the dashboard shell from the login page; it cannot replace the missing server environment settings.
+
 PayFlow is a browser application backed by a shared Supabase database. The client's authorized accounts can sign in from different computers once the Next.js application is hosted at a stable HTTPS address. Each browser has its own session; company membership and role permissions continue to apply. Use individual accounts for staff and grant the appropriate roles through User Roles.
 
 localhost addresses refer to the computer opening the link. They are for development, require the local server to remain running, and are not the client's permanent address.

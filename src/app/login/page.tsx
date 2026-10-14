@@ -25,12 +25,12 @@ export default function LoginPage() {
     catch (error) { setMessage(error instanceof Error ? error.message : 'Unable to request recovery.'); }
     finally { setBusy(false); }
   }
-  return <div className="mx-auto mt-16 max-w-md rounded-xl border bg-card p-6 shadow-sm">
+  return <div className="w-full max-w-md rounded-xl border bg-card p-6 shadow-sm">
     <h1 className="mb-2 text-2xl font-semibold">PayFlow</h1>
     <p className="mb-6 text-sm text-muted-foreground">Sign in with your authorized account. For password recovery, enter your new password after opening the email link.</p>
     <form onSubmit={submit} className="space-y-4">
       <div><Label htmlFor="email">Email</Label><Input id="email" type="email" autoComplete="username" value={email} onChange={e => setEmail(e.target.value)} /></div>
-      <div><Label htmlFor="password">Password</Label><Input id="password" type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} /></div>
+      <div><Label htmlFor="password">Password</Label><Input id="password" type="password" required autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} /></div>
       {message && <p role="status" className="text-sm">{message}</p>}
       <Button type="submit" disabled={busy} className="w-full">{busy ? 'Please wait…' : 'Continue'}</Button>
       <Button type="button" variant="outline" disabled={busy || !email} onClick={recover} className="w-full">Send password reset email</Button>

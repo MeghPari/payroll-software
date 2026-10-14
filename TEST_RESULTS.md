@@ -14,6 +14,8 @@
 
 ## Live status and limits
 
+Login-entry follow-up: provider/proxy regression checks, TypeScript and lint pass. Local GET /login renders email/password without dashboard navigation; anonymous / and /dashboard redirect to /login. Hosted /api/auth/session returned 503 BACKEND_NOT_CONFIGURED, so production environment setup remains required. Browser visual inspection was unavailable because the browser connection could not initialize.
+
 The user confirmed migrations 001-040 applied live, including upgrade-payroll-finance.sql. This records operator confirmation, rather than independent live database verification. No live financial records were changed by test fixtures. Source changes were pushed to the repository default master branch in commit daac610 for the existing Vercel integration. Vercel deployment status remains unverified. No transfer, statutory filing or automated email occurred.
 
 Embedded PostgreSQL uses fixture Auth helpers and Storage metadata, rather than the actual provider. HTTP smoke checks do not authenticate or perform persistent workflows. Live authenticated journeys, actual Storage, concurrent writes, browser/PDF visual acceptance and backup restoration remain unverified. Outstanding platform scope is recorded in docs/IMPLEMENTATION_PROGRESS.md. These results do not establish production readiness.

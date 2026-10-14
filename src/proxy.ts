@@ -8,7 +8,11 @@ import { localSignoutCookie } from '@/lib/session-cookie';
 export async function proxy(request: NextRequest) {
   const projectUrl = process.env.SUPABASE_URL;
   const publicKey = process.env.SUPABASE_PUBLISHABLE_KEY;
-  if (!projectUrl || !publicKey) return NextResponse.next();
+  if (!projectUrl || !publicKey) {
+    const redirect = NextResponse.redirect(new URL('/login', request.url));
+    redirect.headers.set('Cache-Control', 'private, no-store');
+    return redirect;
+  }
   if(request.cookies.get(localSignoutCookie(projectUrl))?.value==='1'){const redirect=NextResponse.redirect(new URL('/login',request.url));redirect.headers.set('Cache-Control','private, no-store');return redirect;}
   let response = NextResponse.next({ request });
   const client = createServerClient(projectUrl, publicKey, {
