@@ -70,6 +70,8 @@ Salary loading now reuses one payroll response and the selected employee's captu
 
 ## Outstanding implementation and acceptance
 
+Testing preview is implemented without schema changes: Calculate Salaries offers Preview without bank / statutory setup. It shows salary-assignment amounts and a calendar-day, half-up base-earnings estimate from complete saved attendance. It excludes deductions, employer contributions and monthly adjustments, leaves final net unknown, and refuses to estimate missing salary/attendance or held salary. It is read-only and cannot approve, post, publish or pay. It does not replace the authoritative payroll calculation.
+
 - Legal statutory filing formats and submission integrations. Archived GST book reviews are review records; they are not submitted returns.
 - Annual TDS/slabs, complete state PT/LWF models, custom components, full-and-final settlement and corrections for exited employees.
 - Provider execution and live acceptance of the new correction, aging and reviewed cash-flow workflows. No transfer is executed by the manual evidence/export workflows.

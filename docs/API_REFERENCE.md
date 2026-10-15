@@ -16,6 +16,8 @@
 
 # API reference
 
+GET /api/payroll/illustration?month=YYYY-MM requires payroll.run plus salary.read and attendance.read. It returns a nonpersistent calendar-day, half-up illustration of salary-assignment earnings, including effective salary changes and paid half-days. It does not require bank/statutory setup, infer statutory deductions, include monthly adjustments, or create payroll/payment records. Missing salary/attendance or a salary hold prevents an earnings estimate; final net remains null. Normal calculate/approve/payment endpoints retain their checks.
+
 POST /api/auth/profile accepts only {displayName: string} (1-100 trimmed characters). It verifies the current active account and updates that account's Auth display metadata; no target user ID, company or role is accepted. GET /api/auth/session returns user.displayName from saved display metadata or the user's own profile, with Account as the empty-name fallback. Display names do not authorize access.
 
 JSON success is { data }; errors are { error: { code, message, fields? } }. Business APIs verify active Auth/profile/membership. x-company-id selects a company but does not grant access. Unsafe requests require Origin equal to APP_URL and JSON content type, with a 128 KB body limit. Results are private/no-store. PDF and payment-instruction CSV downloads return authenticated binary/text responses instead of JSON.

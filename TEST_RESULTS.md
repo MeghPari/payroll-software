@@ -14,6 +14,8 @@
 
 ## Live status and limits
 
+Read-only salary illustration: domain and real Route Handler transport-fixture tests pass exact calendar estimates, effective salary revisions, mid-month employment, half-day rounding ties, unresolved-input/hold denial, unknown net, company scoping and salary/attendance permission denial. The handler has no business-write RPC or table mutation. It creates no bank/statutory data and leaves normal payroll validation unchanged. Authenticated provider/browser acceptance remains pending.
+
 User-requested sample salaries: sample-salary-setup.sql passes an embedded PostgreSQL fixture with all 40 migrations. Exact monthly gross components total INR 70,000 and INR 80,000; effective dates are September 1 or joining date, whichever is later. Audited RPCs record the assignments; a rerun is rejected without changing history. The script is an operator-run data setup, not an automatic migration or evidence of live application. Bank details and statutory choices remain separate.
 
 Payroll blocker guidance: the actual rendered component is tested for named blocking issues, direct Salary/KYC tab links and omission of passed checks. User-reported September blockers are missing salary coverage, bank details and explicit statutory applicability for both employees. These business inputs have not been invented or changed by tests; actual values remain required.

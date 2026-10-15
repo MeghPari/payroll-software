@@ -1,5 +1,6 @@
 "use client";
 import Link from 'next/link';
+import { PayrollIllustration } from '@/components/payroll/payroll-illustration';
 import { PayrollBlockers } from '@/components/payroll/payroll-blockers';
 import { PayrollNavigation } from '@/components/payroll/payroll-navigation';
 import { useAppStore } from '@/store/app-store';
@@ -83,6 +84,7 @@ function PayrollRunPagePeriodContent({month,onMonthChange}:{month:string;onMonth
   const [finalized, setFinalized] = useState(false);
   const [eligibility, setEligibility] = useState<Record<string, number>>({});
   const [exceptions, setExceptions] = useState<Record<PayrollExceptionType, number>>({} as Record<PayrollExceptionType, number>);
+  const [illustration,setIllustration]=useState(false);
   const [validation, setValidation] = useState<PayrollValidationSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -234,7 +236,7 @@ function PayrollRunPagePeriodContent({month,onMonthChange}:{month:string;onMonth
         actions={
           <>
             <FilterSelect value={month} onChange={setMonth} options={payrollMonths} className="w-40 bg-white" />
-            <Button variant="outline" className="gap-1.5" disabled={rows.length === 0} onClick={()=>downloadCSV(`payroll-${monthKey}.csv`,["Employee ID","Gross earnings","Deductions","Net payable"],rows.map(row=>[row.employeeId,row.adjustedGross,row.totalDeductions,row.netPayable]))}>
+            <Button variant="outline" className="gap-1.5" disabled={illustration||rows.length === 0} onClick={()=>downloadCSV(`payroll-${monthKey}.csv`,["Employee ID","Gross earnings","Deductions","Net payable"],rows.map(row=>[row.employeeId,row.adjustedGross,row.totalDeductions,row.netPayable]))}>
               <Download className="h-4 w-4" /> Download Preview
             </Button>
             <Button variant="outline" className="gap-1.5" disabled title="Email delivery is awaiting integration">
@@ -261,6 +263,9 @@ function PayrollRunPagePeriodContent({month,onMonthChange}:{month:string;onMonth
         </div>
       )}
 
+      <div className="mb-4"><Button variant="outline" disabled={!permitted('payroll.run')} onClick={()=>setIllustration(value=>!value)} aria-expanded={illustration}>{illustration?'Close testing preview':'Preview without bank / statutory setup'}</Button></div>
+      {illustration&&<PayrollIllustration key={companyId+monthKey} month={month}/>}
+      {!illustration&&<>
       {validation&&<PayrollBlockers issues={validation.issues} employees={employees} onReviewOvertime={()=>{setShowAdjustments(true);requestAnimationFrame(()=>document.getElementById('payroll-adjustments')?.scrollIntoView({behavior:'smooth'}));}}/>}
       <section className="mb-5 rounded-xl border border-blue-200 bg-blue-50 p-5"><h2 className="font-semibold">{!finalized?'Start with attendance':validation?.blockingErrors?'Complete payroll setup before calculating.':!period?.validated?'Attendance ready. Calculate salaries next.':!period?.approved?'Review the salaries below, then approve.':!isLocked?'Approved. Lock payroll to prepare payment.':'Salaries locked and ready for payment.'}</h2><div className="mt-3 flex flex-wrap gap-2">{!finalized?<Link className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white" href="/attendance">Review monthly attendance</Link>:!period?.approved?<Button disabled={loading||!!busy||!permitted('payroll.run')} onClick={handleCalculate}>{busy==='calculate'?'Calculating...':period?.validated?'Recalculate salaries':'Calculate salaries'}</Button>:!isLocked?<Button disabled={!!busy||!permitted('payroll.lock')} onClick={()=>setLockConfirm(true)}>Lock approved payroll</Button>:permitted('disbursements.write')?<Link href="/disbursement" className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white">Continue to salary payments</Link>:<p className="text-sm">Your finance administrator can prepare salary payments.</p>}</div></section>
       <SectionCard className="mb-5">
@@ -428,6 +433,7 @@ function PayrollRunPagePeriodContent({month,onMonthChange}:{month:string;onMonth
 
       <section id="payroll-adjustments" className="mt-5 rounded-xl border bg-card p-4"><Button variant="outline" onClick={()=>setShowAdjustments(value=>!value)} aria-expanded={showAdjustments}>{showAdjustments?'Hide':'Show'} overtime, bonuses & prior-month corrections</Button>{showAdjustments&&<div className="mt-4"><PriorPayrollCorrections key={"correction/"+companyId+monthKey} month={monthKey} employees={employees} protectedRun={!!period?.approved||period?.status==='Locked'} onSaved={refresh}/><AdjustmentsPanel key={companyId+monthKey} month={monthKey} employees={employees} protectedRun={!!period?.approved||period?.status==='Locked'} onSaved={refresh}/></div>}</section>
       <SalaryCalculationDrawer savedCalculation={rows.find(row=>row.employeeId===drawerEmployee?.id)} employee={drawerEmployee} month={monthKey} open={!!drawerEmployee} onOpenChange={(o) => !o && setDrawerEmployee(null)} />
+      </>}
     </div>
   );
 }
