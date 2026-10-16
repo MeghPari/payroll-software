@@ -11,7 +11,8 @@ end $$;
 -- Check explicitly applicable deductions even when another flag is still unset.
 do $$declare definition text;changed text;begin
  definition:=pg_get_functiondef('public.validate_payroll_internal(uuid,date)'::regprocedure);
- changed:=replace(definition,E'  else\n   if stat.pf_applicable',E'  end if;\n  if true then\n   if stat.pf_applicable');
+ -- SQL Editor copies may retain CRLF, tabs or different indentation.
+ changed:=regexp_replace(definition,'else[[:space:]]+if[[:space:]]+stat[.]pf_applicable','end if; if true then if stat.pf_applicable');
  if changed=definition then raise exception 'Unexpected statutory validation definition';end if;
  execute changed;
  -- Recheck the operator after acquiring the membership serialization lock.

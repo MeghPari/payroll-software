@@ -103,3 +103,6 @@ Employee-profile attendance now reads saved rows and derives its summary from th
 Saved provisional-pay notices appear after reopening Payroll Home, salary review, breakdowns and payslips/PDFs. An optional previous-month comparison flags large changes for review. Company administrators assign confirmed accounts by email; account creation/invitation still uses Supabase Authentication, and client email delivery needs configured SMTP.
 
 The generated provisional payslip was rendered and visually inspected locally. In-app browser initialization failed, so signed-in browser acceptance remains unverified. See CLIENT_HANDOVER.md and the dated research appendix for setup, sources and remaining provider/statutory scope. Earlier status entries describe their respective implementation dates, not current deployment proof.
+
+
+Migration 042 SQL Editor fix: the user reported Unexpected statutory validation definition. The migration now matches the statutory branch across LF, CRLF, tabs and indentation instead of relying on an exact newline string. The new test-client-upgrade-format.mjs reproduces stored Windows line endings and verifies the complete upgrade in three formatting variants. The prior failed transaction did not commit migration 042; rerun only the updated upgrade-client-review.sql after 041.

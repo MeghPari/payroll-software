@@ -47,3 +47,6 @@ npm test passes, including the new actual user/payslip handler fixtures, exact c
 Browser initialization failed in the connected development environment. A signed-in live browser journey, configured SMTP delivery, live Storage acceptance, concurrency and backup restoration remain unverified. Hosted page speed has not been measured; request reduction and code splitting are implementation changes, not measured latency claims.
 
 Final source validation: production build (90 routes/pages), TypeScript, lint with no warnings, and 40 HTTP checks against the local production server passed. The initial HTTP attempt found no running development server; the checks passed after starting the production build on port 3100. No signed-in flow is claimed by these HTTP checks.
+
+
+Migration 042 SQL Editor fix: the user reported Unexpected statutory validation definition. The migration now matches the statutory branch across LF, CRLF, tabs and indentation instead of relying on an exact newline string. The new test-client-upgrade-format.mjs reproduces stored Windows line endings and verifies the complete upgrade in three formatting variants. The prior failed transaction did not commit migration 042; rerun only the updated upgrade-client-review.sql after 041.
