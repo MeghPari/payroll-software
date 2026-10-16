@@ -1,11 +1,12 @@
 import { z } from 'zod';import { tenant } from '@/server/auth';import { body,databaseError,endpoint,result } from '@/server/http';
+import {employeeSetupWarnings} from '@/domain/payroll-setup';
 export const GET=endpoint(async request=>{
  const{client,companyId}=await tenant(request);const params=new URL(request.url).searchParams;
  const month=params.has('month')?z.string().regex(/^\d{4}-(0[1-9]|1[0-2])-01$/).parse(params.get('month')):null,employeeId=params.has('employeeId')?z.string().uuid().parse(params.get('employeeId')):null,rows=[];
  for(let offset=0;;offset+=500){
   let query=client.from('payslips').select('id,employee_id,month,status,generated_at,published_at,content').eq('company_id',companyId).order('month',{ascending:false}).order('employee_id').order('id').range(offset,offset+499);
   if(month)query=query.eq('month',month);if(employeeId)query=query.eq('employee_id',employeeId);
-  const response=await query;databaseError(response.error);rows.push(...(response.data??[]));if((response.data?.length??0)<500)break;
+  const response=await query;databaseError(response.error);rows.push(...(response.data??[]).map(row=>({...row,content:{...row.content,setupWarnings:employeeSetupWarnings(row.content?.setupWarnings,row.employee_id)}})));if((response.data?.length??0)<500)break;
  }
  return result(rows);
 });

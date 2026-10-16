@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useSessionStore } from '@/store/session-store';
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
 import { EmployeeAvatar } from "@/components/shared/employee-avatar";
 import { StatusBadge } from "@/components/shared/status-badge";
+import { PayrollSetupNotice } from '@/components/payroll/payroll-setup-notice';
 import { Skeleton } from "@/components/ui/skeleton";
 import { calculatePayrollPreview } from "@/services/payroll.service";
 import { formatINR } from "@/utils/format";
@@ -62,7 +63,7 @@ export function SalaryCalculationDrawer({ employee, month, open, onOpenChange, s
               <div className="flex items-center gap-3">
                 <EmployeeAvatar name={employee.fullName} size="lg" />
                 <div className="min-w-0">
-                  <h2 className="truncate text-base font-semibold text-foreground">{employee.fullName}</h2>
+                  <SheetTitle className="truncate text-base font-semibold text-foreground">{employee.fullName}</SheetTitle>
                   <p className="truncate text-sm text-muted-foreground">
                     {employee.employeeCode} · {employee.designation}
                   </p>
@@ -84,6 +85,7 @@ export function SalaryCalculationDrawer({ employee, month, open, onOpenChange, s
                 </div>
               ) : (
                 <>
+                  <PayrollSetupNotice warnings={calc.setupWarnings??[]}/>
                   <Section title="A. Salary Profile">
                     <Row label="Gross Before Attendance Reductions" value={formatINR(calc.grossEarnings)} />
                     <Row label="Structure" value={calc.salary.structure} />

@@ -57,7 +57,7 @@ import {
 } from "@/services/employee.service";
 import { permitted } from '@/lib/tenant-api';
 import { useSessionStore } from '@/store/session-store';
-import { employmentStatuses, indianStates } from "@/store/operations-store";
+import { employmentStatuses, indianStates } from "@/config/employee-options";
 import type { Employee, EmployeeStatus } from "@/types";
 import { format } from "date-fns";
 import { toast } from "sonner";

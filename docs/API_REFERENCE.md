@@ -76,3 +76,11 @@ Accounts and journals also support versioned draft correction and accounting per
 
 
 Provider transport failures return HTTP 503 (AUTH_UNAVAILABLE or DATABASE_UNAVAILABLE), rather than a credential error. An unconfirmed write must be checked by refreshing records before retrying. Session/membership checks use migration 040 RPCs, with the earlier verified fallback when absent. Logout always clears this project locally; remoteRevocationConfirmed reports whether provider revocation succeeded.
+
+## Client review changes (041-042)
+
+- Migration 041 permits missing bank/statutory applicability setup during calculation and returns warnings. Explicitly applicable deductions still need reviewed rules; 042 checks these even with other unset flags. Warnings are captured with salary snapshots. Published/locked history is not rewritten.
+- GET /api/users requires users.manage and, with 042, returns only the selected company's members with user_id, display_name, email, role, active and created_at. Earlier schema listing retains the existing limited fallback.
+- POST /api/users accepts exactly one of userId (UUID) or email (confirmed account), plus role and active. The database resolves the confirmed email, enforces users.manage and forbids self access changes. Unknown/unconfirmed email returns ACCOUNT_NOT_READY. This assigns membership; it does not create an Auth account or send an invitation.
+- GET /api/payslips and /api/payslips/pdf filter captured setup warnings to the payslip's employee. RLS remains responsible for underlying payslip access. Future 042 calculations capture only that employee's warning list.
+- Previous-month comparison is a read of saved payroll via GET /api/payroll; it has no financial mutation or anomaly-based automatic adjustment.

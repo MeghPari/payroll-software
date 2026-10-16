@@ -38,3 +38,10 @@ Run npm test, npm run typecheck, npm run lint and npm run build. Additional chec
 Before release, verify live authenticated tenant/role access, session revocation/recovery, private Storage upload/download/review/removal, simultaneous writes, configured payroll rules, reconciliation and visual rendering. Fixture Auth/REST/Storage tests do not verify the live providers. Direct Supabase RPC traffic remains subject to RLS/permissions rather than the application's HTTP quota counters.
 
 Before a production schema upgrade, take a backup and test restoration into a separate project, including Auth dependencies and separately backed-up private Storage. No restoration or deployment has been performed here. Automated bank execution, email, filing and billing require separately configured providers. See IMPLEMENTATION_PROGRESS.md for outstanding scope.
+
+
+## Client review update - 16 October 2026
+
+The user confirmed migration 041 (upgrade-optional-payroll-setup.sql) applied. Run only upgrade-client-review.sql once for 042. New installations append 041 then 042 to the package sequence above. Do not replay earlier packages. The 042 upgrade fixture preserves protected payroll, published payslips and posted/payment history.
+
+Client account assignment accepts confirmed account emails in User Roles. Create or invite new accounts through Supabase Authentication; this application does not send Auth invitations. Configure custom SMTP before relying on client email delivery; see https://supabase.com/docs/guides/auth/auth-smtp. Follow CLIENT_HANDOVER.md for individual accounts and monthly operations.

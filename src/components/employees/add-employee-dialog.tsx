@@ -20,7 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { createEmployee, updateEmployee, checkDuplicateUAN } from "@/services/employee.service";
-import { indianStates, employmentCategories } from "@/store/operations-store";
+import { indianStates, employmentCategories } from "@/config/employee-options";
 import type { Employee } from "@/types";
 import { AlertTriangle, Loader2 } from "lucide-react";
 

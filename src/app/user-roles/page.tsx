@@ -26,7 +26,7 @@ function UserRolesContent() {
   const permissions=Object.fromEntries(roleNames.map(role=>[role,session?.permissions.filter(row=>row.role===role).map(row=>row.permission)??[]]));
   const allModules=Array.from(new Set(Object.values(permissions).flat())).sort();
   const roles=roleNames.map(role=>({id:role,name:role,description:'Database-enforced permissions for '+role+'.',users:members.filter(member=>member.active&&member.role===role).length,permissions:permissions[role]}));
-  const users=members.map(member=>({id:member.user_id,name:member.user_id===session?.user.id?'Your account':member.user_id,email:member.user_id===session?.user.id?session.user.email:member.user_id,role:member.role,status:member.active?'Active':'Inactive'}));
+  const users=members.map(member=>({id:member.user_id,name:member.display_name&&member.display_name!=='Account'?member.display_name:member.user_id===session?.user.id?(session.user.displayName||'Your account'):'Account',email:member.email||(member.user_id===session?.user.id?session.user.email:'Email unavailable'),role:member.role,status:member.active?'Active':'Inactive'}));
   return (
     <div>
       <PageHeader
@@ -40,6 +40,7 @@ function UserRolesContent() {
       />
 
       {error&&<p role="alert" className="mb-4 rounded-xl border p-4 text-sm text-danger">{error}</p>}
+      <details className="mb-5 rounded-xl border bg-card p-4 text-sm"><summary className="cursor-pointer font-semibold">Set up a client or staff login</summary><ol className="mt-3 list-decimal space-y-2 pl-5"><li>Create or invite the account in Supabase Authentication. The account must have a confirmed email before access can be assigned.</li><li>Select Assign User and enter that account email. Choose the role needed for their work, then save.</li><li>The user signs in to this PayFlow website from any computer. They can use Send password reset email on the login screen to set their own password.</li></ol><p className="mt-3 text-muted-foreground">For attendance and salary processing, use Payroll Admin; Finance handles salary payments. Employee access to personal payslips also needs the account linked from the employee profile. Creating an employee record does not create a login.</p></details>
       <MemberDialog member={editing} onClose={()=>setEditing(undefined)} onSaved={()=>setRevision(value=>value+1)}/>
       <SectionCard title="Permission Matrix" subtitle="Centralized module access per role." className="mb-5" noPadding>
         <div className="overflow-x-auto">
@@ -121,7 +122,7 @@ function UserRolesContent() {
                   <td className="px-4 py-3">{u.role}</td>
                   <td className="px-4 py-3">
                     <StatusBadge status={u.status} />
-                  </td><td className="px-4 py-3"><Button size="sm" variant="outline" disabled={!permitted("users.manage")} onClick={()=>setEditing(members.find(member=>member.user_id===u.id))}>Edit Access</Button></td>
+                  </td><td className="px-4 py-3"><Button size="sm" variant="outline" disabled={!permitted("users.manage")||u.id===session?.user.id} onClick={()=>setEditing(members.find(member=>member.user_id===u.id))}>Edit Access</Button></td>
                 </tr>
               ))}
             </tbody>

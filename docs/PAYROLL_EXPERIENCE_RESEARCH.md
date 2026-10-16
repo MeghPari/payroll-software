@@ -31,3 +31,31 @@ The salary screen now loads employees and one payroll result rather than fetchin
 This is a reduction in request count, not a measured claim of faster network latency. Provider latency and region placement still need measurement. The in-memory month resets on a full reload; it remains consistent while navigating. Normal JWT, membership, role permissions, RLS, optimistic versions, audit, exact rounding and protected financial history remain in force. No schema migration is required for this interface change.
 
 Browser visual and authenticated journey acceptance remain separate from build, fixture and HTTP checks.
+
+## 16 October 2026 review: client handover and saved salary review
+
+This pass revisited official documentation rather than treating feature lists as proof of calculation correctness.
+
+| Source | Finding | Decision for PayFlow |
+| --- | --- | --- |
+| [Zoho India pay runs](https://www.zoho.com/in/payroll/help/employer/pay-runs/) | Payroll separates input review, calculation, approval, payment and later corrections. | Keep the short monthly sequence and protected financial history. Optional bank setup affects calculation warnings; verified bank instructions remain a payment prerequisite. |
+| [Gusto payroll review alerts](https://support.gusto.com/article/260112145935220/review-changes-to-your-regular-payroll-with-helpful-alerts-for-admins) | Historical comparisons identify changes for manual review; alerts do not change or submit payroll. | Add an on-demand previous-month comparison using saved salaries and payable days. PayFlow flags changes of at least INR 1,000 and 20%, or movement to/from zero. This is our transparent review rule, not Gusto's algorithm. No baseline means no inferred anomaly. |
+| [greytHR attendance processing](https://www.greythr.com/greythr-help/admin/answers/122759105/) | Attendance records feed payroll and require review. | Fix the employee-profile daily rows, which still read a legacy local store. The rows and summary now derive from the same saved attendance query. Missing data is not assumed present or absent. |
+| [Zoho users and roles](https://www.zoho.com/in/payroll/help/employer/settings/users-and-roles.html) | Named users with limited roles are more manageable than technical account identifiers. | Assign confirmed accounts by email and show names/emails only to company user administrators. In-app invitation delivery is not implemented. |
+| [Supabase users](https://supabase.com/docs/guides/auth/users) and [SMTP](https://supabase.com/docs/guides/auth/auth-smtp) | User creation/invitation and application membership are distinct. Default SMTP is restricted and unsuitable for general client delivery. | Retain individual verified accounts and explicit membership. Document dashboard account creation/invitation and custom SMTP for recovery/invites; do not expose an admin secret or invent successful email delivery. |
+| [Vercel function regions](https://vercel.com/docs/functions/configuring-functions/region) | Distance between functions and the database adds latency. | Document region alignment after confirming the actual Supabase region. Do not guess a region or migrate client data. |
+| [Supabase query optimization](https://supabase.com/docs/guides/database/query-optimization) | Indexes and query plans should guide database tuning. | Existing employee/date/salary-resolution indexes are present. Remove redundant application reads first; no speculative indexes without live query measurements. |
+
+### Changes completed
+
+- Saved bank/statutory warnings remain visible on Payroll Home, salary review, employee breakdown and payslip views/PDFs. Unknown statutory setup clearly marks net pay provisional without blocking calculation.
+- New snapshots capture warnings for their employee only. Legacy payslip API responses are filtered to the employee, without rewriting locked/published financial records.
+- Partially specified statutory flags still enforce explicitly applicable reviewed rules. Unknown flags remain unknown. The configuration form is retained.
+- Daily attendance uses one register request and the already loaded employee list, instead of two register requests plus another employee request. Date-switch responses are guarded against late arrivals, and load failures offer retry rather than presenting everyone as unmarked.
+- Calculation/approval/locking refresh the saved payroll once, retaining the employee list. Independent payroll GET reads run concurrently. Advanced salary panels are split into on-demand bundles.
+- Salary Structures reuses already loaded revision profiles instead of fetching salary separately for every employee. Live components import reference options from a data-only module, avoiding initialization of the legacy seeded store.
+- Company administrators can assign confirmed accounts by email and see member names. Normal JWT/RLS authorization and audited membership changes remain enforced; no Auth admin key is required for assignment. Permission is checked again after the membership lock.
+
+### Acceptance limits
+
+Automated fixtures verify arithmetic, permissions and workflow behavior, not a signed-in production journey. The browser connector could not initialize in this session. The generated provisional payslip was rendered and inspected locally. Live latency, client SMTP delivery, Storage operations, backup restoration and concurrent multi-user acceptance still need the configured hosted services. Annual statutory models, automatic government filing, bank execution and full-and-final settlement remain separate implementation work; they are not implied by this UX pass.

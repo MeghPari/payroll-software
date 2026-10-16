@@ -1,10 +1,8 @@
 import type { Role } from "@/types/operations";
 
 /**
- * Centralized permission definitions for the six payroll-system roles.
- * Backend authorization is not implemented yet — this exists so a real
- * authorization layer can be wired in later without touching UI components,
- * and so the frontend can demonstrate role-appropriate navigation/visibility.
+ * Display labels for the six roles. Runtime permissions come from the verified
+ * session; API authorization and database RLS/RPC permissions enforce access.
  */
 export const roles: Role[] = ["Super Admin", "HR Admin", "Payroll Admin", "Finance", "Manager", "Employee"];
 

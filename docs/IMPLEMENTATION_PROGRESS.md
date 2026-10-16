@@ -8,7 +8,7 @@ SVS Corporate Services is already bootstrapped. The user confirmed successful ap
 
 The additive **supabase/upgrade-remaining.sql** now contains migrations **021-031**. The user confirmed successful application on 14 October 2026. Do not rerun this package. The package preserves existing company, membership, employee and verified bank records in the local upgrade fixture. The publishable key cannot apply schema changes. Missing schema produces MIGRATION_REQUIRED; future additive upgrades will be prepared separately.
 
-No deployment, bank transfer or statutory filing has been performed. Anonymous REST probes deny table access. Authenticated live workflows remain unverified.
+Source changes have been pushed to the connected Vercel repository, and the user confirmed hosted login works. No bank transfer or statutory filing has been performed by tools. Anonymous REST probes deny table access; authenticated live workflows remain unverified by tools.
 
 ## Implemented foundation
 
@@ -92,3 +92,14 @@ Migration 040 combines active-profile, membership, permission and request-quota 
 - Validation warnings are captured in each salary snapshot. Shared month selectors show newest first.
 - Apply supabase/upgrade-optional-payroll-setup.sql once after migrations 001-040. Live application is pending user SQL Editor execution.
 - Database fixture verifies exact INR 70,000 calculation in September and October with no bank/statutory records, two warnings and persisted warning snapshots. Existing database regression suite passed.
+
+## 16 October 2026 - Client review update (042)
+The user confirmed migration 041 applied successfully. Do not rerun upgrade-optional-payroll-setup.sql.
+
+Migration 042 is prepared as supabase/upgrade-client-review.sql and has not been applied to the live project by tools. It scopes future snapshot warnings per employee, validates explicitly applicable deductions even with other unset flags, and adds authorized named member listing/email assignment. Existing locked payroll, published payslips and payment records are preserved in the upgrade fixture.
+
+Employee-profile attendance now reads saved rows and derives its summary from the same response. Daily attendance removes duplicate reads, guards late date-switch responses and exposes retry on load failure. Salary actions refresh once; independent server reads run concurrently, advanced panels load on demand, and salary structures reuse revision data instead of per-employee salary calls. Live components no longer initialize the seeded operations store for reference options.
+
+Saved provisional-pay notices appear after reopening Payroll Home, salary review, breakdowns and payslips/PDFs. An optional previous-month comparison flags large changes for review. Company administrators assign confirmed accounts by email; account creation/invitation still uses Supabase Authentication, and client email delivery needs configured SMTP.
+
+The generated provisional payslip was rendered and visually inspected locally. In-app browser initialization failed, so signed-in browser acceptance remains unverified. See CLIENT_HANDOVER.md and the dated research appendix for setup, sources and remaining provider/statutory scope. Earlier status entries describe their respective implementation dates, not current deployment proof.

@@ -8,7 +8,7 @@ export interface AuditFilters {
   employeeId?: string;
 }
 
-// TODO: Replace mock implementation with REST/GraphQL API.
+// Read the authorized, paginated audit endpoint.
 export async function getAuditTrail(filters: AuditFilters = {}): Promise<AuditRecord[]> {
   const companyId = useSessionStore.getState().companyId;
   if (!companyId) throw new Error('Select an authorized company first.');

@@ -1,4 +1,5 @@
 "use client";
+import {PayrollSetupNotice} from '@/components/payroll/payroll-setup-notice';
 import { useAppStore } from '@/store/app-store';
 import { useEffect, useMemo, useState } from "react";
 import type { Column } from "@/components/shared/data-table";
@@ -118,6 +119,7 @@ function PayslipsPagePeriodContent({month,onMonthChange}:{month:string;onMonthCh
     <div>
       <PageHeader title="Payslips" subtitle="Generate, publish and track employee payslips." breadcrumb="Payroll › Payslips" actions={<FilterSelect value={month}onChange={value=>{setMonth(value);setPayslips([]);}}options={payrollMonths}/>} />
 
+      <PayrollSetupNotice warnings={payslips.flatMap(payslip=>payslip.setupWarnings??[])}/>
       {loading ? (
         <CardGridSkeleton count={4} />
       ) : (

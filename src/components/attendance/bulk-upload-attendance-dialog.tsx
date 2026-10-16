@@ -10,7 +10,7 @@ import {
   type AttendanceImportRow,
 } from "@/services/attendance.service";
 import { payrollMonths,useAppStore } from "@/store/app-store";
-import { monthKeyFromLabel } from "@/store/operations-store";
+import { monthKey as monthKeyFromLabel } from '@/domain/dates';
 import type { ImportRowResult } from "@/types";
 
 

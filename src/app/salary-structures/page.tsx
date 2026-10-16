@@ -22,9 +22,9 @@ import { getSalaryStructures } from "@/services/payroll.service";
 import { getEmployees } from "@/services/employee.service";
 import { getSalaryRevisions } from "@/services/salary.service";
 import { BulkUploadSalaryDialog } from "@/components/salary/bulk-upload-salary-dialog";
-import {grossOf}from '@/store/operations-store';
+import {companyToday}from '@/domain/dates';
 import{StructureDialog}from '@/components/salary/structure-dialog';
-import{getSalaryProfile}from '@/services/salary.service';
+
 import{createSalaryStructure}from '@/services/salary-structure.service';
 import{permitted}from '@/lib/tenant-api';
 import{useRouter}from 'next/navigation';
@@ -62,7 +62,9 @@ function SalaryStructuresPageTenantContent() {
       setRevisions(rev);
       setSelectedId((prev) => prev ?? data[0]?.id ?? null);
       setLoading(false);
-      Promise.all(emp.map(async e=>{const profile=await getSalaryProfile(e.id);return [e.id,{structure:profile?.structure??'',gross:profile?grossOf(profile):0}]as const;})).then(values=>setEmployeeSalaries(Object.fromEntries(values))).catch(error=>toast.error(error instanceof Error?error.message:'Unable to load assignments.'));
+      const current=new Map<string,SalaryRevision>();
+      for(const revision of [...rev].sort((a,b)=>b.effectiveFrom.localeCompare(a.effectiveFrom)))if(revision.effectiveFrom<=companyToday()&&!current.has(revision.employeeId))current.set(revision.employeeId,revision);
+      setEmployeeSalaries(Object.fromEntries(emp.map(employee=>{const revision=current.get(employee.id);return[employee.id,{structure:revision?.profile?.structure??'',gross:revision?.revisedGross??0}];})));
     }).catch(error=>{setLoading(false);toast.error(error instanceof Error?error.message:'Unable to load salary structures.');});
   }
 

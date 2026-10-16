@@ -4,7 +4,7 @@ import { MonthlyAttendanceEditor } from '@/components/attendance/monthly-attenda
 import { dailyAttendanceRoster } from '@/domain/daily-attendance-roster';
 import { PayrollNavigation } from '@/components/payroll/payroll-navigation';
 import { useAppStore } from '@/store/app-store';
-﻿import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Users,
   CheckCircle2,
@@ -49,7 +49,7 @@ import {
   getLeaveBalances,
   getLeaveRequests,
   getMonthlyAttendanceRegister,
-  getTodayAttendanceSummary,
+  dailyAttendanceCounts,
   getUploadHistory,
   isAttendanceFinalized,
   finalizeAttendance,
@@ -57,13 +57,13 @@ import {
   lateMinutes,
   updateLeaveRequestStatus,
   type MonthlyRegisterRow,
-  type TodayAttendanceCounts,
+
 } from "@/services/attendance.service";
 import { getEmployees } from "@/services/employee.service";
 import { companyToday as today,monthKey as monthKeyFromLabel } from '@/domain/dates';
 import { permitted } from '@/lib/tenant-api';
 import { useSessionStore } from '@/store/session-store';
-import { indianStates } from "@/store/operations-store";
+import { indianStates } from "@/config/employee-options";
 import { payrollMonths } from "@/store/app-store";
 
 import { downloadCSV } from "@/lib/csv";
@@ -136,7 +136,8 @@ function AttendanceContent() {
 
 function TodayAttendanceTab({ employees, loading: employeesLoading }: { employees: Employee[]; loading: boolean }) {
   const [date, setDate] = useState(today());
-  const [counts, setCounts] = useState<TodayAttendanceCounts | null>(null);
+  const requestSequence=useRef(0);
+  const [loadError,setLoadError]=useState('');
   const [records, setRecords] = useState<DailyAttendanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("All");
@@ -148,12 +149,11 @@ function TodayAttendanceTab({ employees, loading: employeesLoading }: { employee
 
   function refresh() {
     setLoading(true);
-    Promise.all([getTodayAttendanceSummary(date), getDailyAttendance(date)]).then(([c, r]) => {
-      setCounts(c);
-      setRecords(r);
-      setLoading(false);
-    }).catch(error=>{setLoading(false);toast.error(error.message);});
+    const sequence=++requestSequence.current;
+    setLoadError('');
+    getDailyAttendance(date).then(rows=>{if(sequence!==requestSequence.current)return;setRecords(rows);setLoading(false);}).catch(error=>{if(sequence!==requestSequence.current)return;setRecords([]);setLoading(false);setLoadError(error instanceof Error?error.message:'Unable to load attendance.');});
   }
+  function cancelPendingRefresh(){requestSequence.current++;}
 
   useEffect(() => {
     // Re-fetches (and resets the loading flag) whenever the selected date changes.
@@ -161,10 +161,12 @@ function TodayAttendanceTab({ employees, loading: employeesLoading }: { employee
     // only needs to run when `date` changes.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     refresh();
+    return cancelPendingRefresh;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date]);
 
-  const roster=useMemo(()=>dailyAttendanceRoster(employees,records,date),[employees,records,date]);
+  const counts=loading||loadError?null:dailyAttendanceCounts(employees,records,date);
+  const roster=useMemo(()=>loadError?[]:dailyAttendanceRoster(employees,records,date),[employees,records,date,loadError]);
   const rows=useMemo(()=>roster.filter(({record,employee})=>
     (statusFilter==='All'||(record?.status??'Not marked')===statusFilter)&&
     (departmentFilter==='All'||employee.department===departmentFilter)&&
@@ -231,7 +233,8 @@ function TodayAttendanceTab({ employees, loading: employeesLoading }: { employee
 
   return (
     <div className="space-y-5">
-      {loadingAll || !counts ? (
+      {loadError&&<div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm"><p>{loadError}</p><Button variant="outline" className="mt-2" onClick={refresh}>Retry attendance</Button></div>}
+      {loadError?null:loadingAll || !counts ? (
         <CardGridSkeleton count={4} />
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -246,20 +249,21 @@ function TodayAttendanceTab({ employees, loading: employeesLoading }: { employee
         </div>
       )}
 
-      <p className="text-sm text-muted-foreground">{roster.filter(row=>!row.record).length} employee(s) have not been marked for this date.</p>
+      {!loadError&&!loadingAll&&<p className="text-sm text-muted-foreground">{roster.filter(row=>!row.record).length} employee(s) have not been marked for this date.</p>}
       <SectionCard
         title="Daily Attendance Register"
         subtitle={format(new Date(date), "dd MMM yyyy (EEEE)")}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Input type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value)} className="w-40" />
-            <Button variant="outline" size="sm" className="gap-1.5" disabled={!permitted("attendance.write")} onClick={() => setMarkOpen(true)}>
+            <Button variant="outline" size="sm" className="gap-1.5" disabled={loadingAll||!!loadError||!permitted("attendance.write")} onClick={() => setMarkOpen(true)}>
               <UserPlus2 className="h-3.5 w-3.5" /> Mark Attendance
             </Button>
             <Button
               variant="outline"
               size="sm"
               className="gap-1.5"
+              disabled={loadingAll||!!loadError}
               onClick={() =>
                 downloadCSV(
                   `attendance_${date}.csv`,

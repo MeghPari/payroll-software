@@ -212,6 +212,7 @@ export type PayrollEligibility = "Eligible" | "Salary Hold" | "Exited" | "No Pay
 export type PayrollCalculationStatus = "Ready" | "Salary Hold" | "Attendance Issue" | "KYC Issue" | "Bank Details Missing" | "Error";
 
 export interface PayrollCalculation {
+  setupWarnings?:import('@/domain/payroll-setup').PayrollSetupWarning[];
   earningsBreakdown?:Record<string,number>;
   deductionBreakdown?:Record<string,number>;
   employeeId: string;

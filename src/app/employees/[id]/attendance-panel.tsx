@@ -6,10 +6,10 @@ import { StatCard } from "@/components/shared/stat-card";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { FilterSelect } from "@/components/shared/filter-select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { calculateAttendanceSummary } from "@/services/attendance.service";
-import { useOperations, monthKeyFromLabel } from "@/store/operations-store";
-import { payrollMonths } from "@/store/app-store";
-import { CURRENT_PAYROLL_MONTH } from "@/data/mock/attendance";
+import { getEmployeeAttendanceMonth } from "@/services/attendance.service";
+import { monthKey as monthKeyFromLabel } from '@/domain/dates';
+import { payrollMonths,useAppStore } from "@/store/app-store";
+import {Button} from '@/components/ui/button';
 import type { AttendanceSummary, DailyAttendanceRecord, Employee } from "@/types";
 import { CalendarCheck, CalendarX, Clock3, UserCheck } from "lucide-react";
 import { format } from "date-fns";
@@ -21,22 +21,22 @@ interface MonthData {
 }
 
 export function AttendancePanel({ employee }: { employee: Employee }) {
-  const [month, setMonth] = useState(CURRENT_PAYROLL_MONTH);
+  const month=useAppStore(state=>state.month),setMonth=useAppStore(state=>state.setMonth);
+  return <EmployeeAttendanceMonth key={employee.id+'/'+month} employee={employee} month={month} setMonth={setMonth}/>;
+}
+function EmployeeAttendanceMonth({employee,month,setMonth}:{employee:Employee;month:string;setMonth:(month:string)=>void}){
+  const [error,setError]=useState(''),[revision,setRevision]=useState(0);
   const [data, setData] = useState<MonthData | null>(null);
   const monthKey = monthKeyFromLabel(month);
-  const loading = !data || data.monthKey !== monthKey;
-  const summary = loading ? undefined : data.summary;
-  const records = loading ? [] : data.records;
+  const loading = !error&&(!data || data.monthKey !== monthKey);
+  const summary = loading ? undefined : data?.summary;
+  const records = loading ? [] : data?.records??[];
 
   useEffect(() => {
-    calculateAttendanceSummary(employee.id, monthKey).then((s) => {
-      const rows = useOperations
-        .getState()
-        .attendance.filter((a) => a.employeeId === employee.id && a.date.startsWith(monthKey))
-        .sort((a, b) => (a.date < b.date ? 1 : -1));
-      setData({ monthKey, summary: s, records: rows });
-    });
-  }, [employee.id, monthKey]);
+    let active=true;
+    getEmployeeAttendanceMonth(employee,monthKey).then(data=>{if(active){setData(data);setError('');}}).catch(error=>{if(active)setError(error instanceof Error?error.message:'Unable to load attendance.');});
+    return()=>{active=false;};
+  }, [employee,monthKey,revision]);
 
   return (
     <div className="space-y-4">
@@ -45,7 +45,8 @@ export function AttendancePanel({ employee }: { employee: Employee }) {
         <FilterSelect value={month} onChange={setMonth} options={payrollMonths} placeholder="Month" className="w-44 bg-white" />
       </div>
 
-      {loading || !summary ? (
+      {error&&<div role="alert" className="rounded-lg border p-4 text-sm"><p>{error}</p><Button variant="outline" className="mt-2" onClick={()=>setRevision(value=>value+1)}>Retry attendance</Button></div>}
+      {error?null:loading || !summary ? (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <Skeleton key={i} className="h-24 w-full rounded-xl" />
@@ -67,6 +68,7 @@ export function AttendancePanel({ employee }: { employee: Employee }) {
           </div>
         ) : (
           <div className="max-h-96 overflow-auto">
+            {!records.length&&<p className="p-4 text-sm text-muted-foreground">No attendance recorded for this employee and month.</p>}
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-muted/50 text-left text-xs font-semibold text-muted-foreground">
                 <tr>

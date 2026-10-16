@@ -63,4 +63,8 @@ try{
  await database.exec(await readFile(new URL('../supabase/upgrade-payroll-finance.sql',import.meta.url),'utf8'));
  for(let index=0;index<financialTables.length;index++){const rows=(await database.query(`select to_jsonb(row) record from public.${financialTables[index]} row`)).rows;if(JSON.stringify(rows)!==JSON.stringify(beforeCorrections[index]))throw new Error('Payroll/finance upgrade changed existing '+financialTables[index]);}
  console.log('PASS payroll/finance upgrade preserves locked payroll, published payslips, posted journals/invoices and payment evidence exactly.');
+ await database.exec(await readFile(new URL('../supabase/upgrade-optional-payroll-setup.sql',import.meta.url),'utf8'));
+ await database.exec(await readFile(new URL('../supabase/upgrade-client-review.sql',import.meta.url),'utf8'));
+ for(let index=0;index<financialTables.length;index++){const rows=(await database.query(`select to_jsonb(row) as record from public.${financialTables[index]} row`)).rows;if(JSON.stringify(rows)!==JSON.stringify(financialBefore[index]))throw Error('Client review upgrade rewrote '+financialTables[index]);}
+ console.log('PASS optional setup and client-review packages preserve locked payroll, published payslips and posted/paid financial history.');
 }catch(error){console.error('Upgrade test failed',{message:error.message,code:error.code});process.exitCode=1;}finally{await database.close();}

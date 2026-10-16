@@ -5,14 +5,16 @@ const monthSchema=z.string().regex(/^\d{4}-(0[1-9]|1[0-2])-01$/);
 export const GET=endpoint(async request=>{
  const {client,companyId}=await tenant(request,'payroll.run');
  const month=monthSchema.parse(new URL(request.url).searchParams.get('month'));
- const run=await client.from('payroll_runs').select('*').eq('company_id',companyId).eq('month',month).maybeSingle();databaseError(run.error);
- const attendance=await client.from('attendance_periods').select('finalized_at').eq('company_id',companyId).eq('month',month).maybeSingle();databaseError(attendance.error);
+ const [run,attendance,workflow]=await Promise.all([
+  client.from('payroll_runs').select('*').eq('company_id',companyId).eq('month',month).maybeSingle(),
+  client.from('attendance_periods').select('finalized_at').eq('company_id',companyId).eq('month',month).maybeSingle(),
+  client.rpc('payroll_workflow_status',{c:companyId,m:month})
+ ]);databaseError(run.error);databaseError(attendance.error);
  const snapshots=[];
  if(run.data)for(let offset=0;;offset+=500){
   const page=await client.from('payroll_run_employees').select('*').eq('company_id',companyId).eq('run_id',run.data.id).order('employee_id').range(offset,offset+499);databaseError(page.error);
   snapshots.push(...(page.data??[]));if((page.data?.length??0)<500)break;
  }
- const workflow=await client.rpc('payroll_workflow_status',{c:companyId,m:month});
  if(workflow.error&&!['PGRST202','42883'].includes(workflow.error.code))databaseError(workflow.error);
  return result({run:run.data,attendanceFinalized:!!attendance.data?.finalized_at,snapshots,workflow:workflow.error?null:workflow.data});
 });
@@ -28,10 +30,11 @@ export const POST=endpoint(async request=>{
  if(input.action==='validate'||input.action==='calculate'){
   if(input.action==='calculate'){
    const checks=await client.rpc('validate_payroll',{c:companyId,m:input.month});databaseError(checks.error);
-   if(checks.data.blockingErrors>0)throw new ApiError(422,'PAYROLL_NOT_READY',`Payroll has ${checks.data.blockingErrors} blocking issue(s). ${checks.data.issues.slice(0,3).map((issue:{message:string})=>issue.message).join(' ')} Open Validate to review every issue.`);
+   if(checks.data.blockingErrors>0)throw new ApiError(422,'PAYROLL_NOT_READY',`Payroll has ${checks.data.blockingErrors} blocking issue(s). ${checks.data.issues.filter((issue:{severity:string})=>issue.severity==='Blocking Error').slice(0,3).map((issue:{message:string})=>issue.message).join(' ')} Open Validate to review every issue.`);
   }
   const response=await client.rpc(input.action==='validate'?'validate_payroll':'calculate_payroll',{c:companyId,m:input.month});
   if(response.error?.code==='23514'&&response.error.message==='Payroll is approved or locked')throw new ApiError(409,'PAYROLL_LOCKED','Approved or locked payroll cannot be recalculated. Use the authorized correction workflow.');
+  if(response.error?.code==='23514'&&response.error.message==='A configured statutory deduction needs a reviewed rule covering the month')throw new ApiError(422,'STATUTORY_RULE_REQUIRED','A deduction is marked applicable but has no reviewed rule for this month. Review Statutory Configuration in Settings, then calculate again.');
   if(response.error?.code==='23514'&&response.error.message==='Negative net payable; correct deductions before payroll')throw new ApiError(422,'NEGATIVE_NET_PAY','Deductions exceed an employee’s calculated gross pay. Review deductions and unpaid attendance before recalculating.');
   databaseError(response.error);return result(response.data);
  }

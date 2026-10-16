@@ -6,6 +6,7 @@ export interface PayslipEarningLine {
 }
 
 export interface Payslip {
+  setupWarnings?:import('@/domain/payroll-setup').PayrollSetupWarning[];
   id: string;
   employeeId: string;
   employeeCode: string;

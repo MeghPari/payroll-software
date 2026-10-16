@@ -8,6 +8,9 @@ const content={companyName:'Fixture company',employeeName:'परीक्षण
 const pdf=await payslipPdf(content,'00000000-0000-4000-8000-000000000001','Draft','2026-10-09T00:00:00Z');
 assert.equal((await PDFDocument.load(pdf)).getPageCount(),1);
 await writeFile(new URL('fixture-payslip.pdf',output),pdf);
+const provisional=await payslipPdf({...content,setupWarnings:[{check:'Statutory Configuration',severity:'Warning'}]},'fixture','Draft','2026-10-09T00:00:00Z');
+assert.equal((await PDFDocument.load(provisional)).getPageCount(),1);
+await writeFile(new URL('fixture-provisional-payslip.pdf',output),provisional);
 const long=await payslipPdf({...content,companyName:'A'.repeat(600)},'fixture','Draft','2026-10-09T00:00:00Z');assert.ok((await PDFDocument.load(long)).getPageCount()>=1);
 console.log('PASS payslip PDF generation, Devanagari font embedding and long-line wrapping. Visual PDF verification remains separate.');
 

@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { employmentStatuses } from "@/store/operations-store";
+import { employmentStatuses } from "@/config/employee-options";
 import { updateEmployeeStatus } from "@/services/employee.service";
 import type { Employee, ExitType, SettlementStatus } from "@/types";
 import { toast } from "sonner";

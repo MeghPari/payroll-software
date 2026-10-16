@@ -37,3 +37,13 @@ Login-entry follow-up: provider/proxy regression checks, TypeScript and lint pas
 The user confirmed migrations 001-040 applied live, including upgrade-payroll-finance.sql. This records operator confirmation, rather than independent live database verification. No live financial records were changed by test fixtures. Source changes were pushed to the repository default master branch in commit daac610 for the existing Vercel integration. Vercel deployment status remains unverified. No transfer, statutory filing or automated email occurred.
 
 Embedded PostgreSQL uses fixture Auth helpers and Storage metadata, rather than the actual provider. HTTP smoke checks do not authenticate or perform persistent workflows. Live authenticated journeys, actual Storage, concurrent writes, browser/PDF visual acceptance and backup restoration remain unverified. Outstanding platform scope is recorded in docs/IMPLEMENTATION_PROGRESS.md. These results do not establish production readiness.
+
+## 16 October 2026 client review verification
+
+All 42 migrations and the database workflow suites pass in PGlite. New fixtures calculate across two months with optional setup, test confirmed-email member assignment/admin denial/self-change denial, enforce explicit PF with partially unset other flags, and verify employee-scoped captured warnings. Upgrade packages 041 and 042 preserve locked payroll, published payslips, posted journals/invoices and partial payments exactly.
+
+npm test passes, including the new actual user/payslip handler fixtures, exact comparison threshold/month-boundary/zero/no-baseline cases, saved warning notice rendering, and employee-profile attendance consistency. TypeScript checks pass. The provisional payslip PDF was generated, its notice verified by text extraction, and a rendered page visually inspected with no clipping or overlap. Auth/REST/Storage in these tests are fixtures, and no live account creation, email, salary calculation or payment was executed by tools.
+
+Browser initialization failed in the connected development environment. A signed-in live browser journey, configured SMTP delivery, live Storage acceptance, concurrency and backup restoration remain unverified. Hosted page speed has not been measured; request reduction and code splitting are implementation changes, not measured latency claims.
+
+Final source validation: production build (90 routes/pages), TypeScript, lint with no warnings, and 40 HTTP checks against the local production server passed. The initial HTTP attempt found no running development server; the checks passed after starting the production build on port 3100. No signed-in flow is claimed by these HTTP checks.

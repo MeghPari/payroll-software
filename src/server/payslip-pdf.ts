@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PDFDocument,rgb } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
-export interface PayslipContent{companyName:string;employeeName:string;employeeCode:string;month:string;calendarDays:number;proration?:string;prorationDays?:number;paidDays:number;grossMinor:number;deductionMinor:number;netMinor:number;earnings:Record<string,number>;deductions:Record<string,number>;employer:Record<string,number>}
+export interface PayslipContent{setupWarnings?:{check:string;severity:string}[];companyName:string;employeeName:string;employeeCode:string;month:string;calendarDays:number;proration?:string;prorationDays?:number;paidDays:number;grossMinor:number;deductionMinor:number;netMinor:number;earnings:Record<string,number>;deductions:Record<string,number>;employer:Record<string,number>}
 const labels:Record<string,string>={basic:'Basic',hra:'HRA',special:'Special allowance',conveyance:'Conveyance',other:'Other earnings',bonus:'Bonus',overtime:'Overtime',arrears:'Arrears',reimbursement:'Reimbursement',variable:'Variable pay',pf:'PF',esi:'ESI',pt:'Professional tax',tds:'TDS',loan:'Loan recovery',advance:'Advance recovery',otherDeduction:'Other deduction',employerOther:'Other employer contribution'};
 export async function payslipPdf(content:PayslipContent,id:string,status:string,date:string){
  const document=await PDFDocument.create();document.registerFontkit(fontkit);
@@ -25,5 +25,6 @@ export async function payslipPdf(content:PayslipContent,id:string,status:string,
  line('Deductions',13);for(const[code,amount]of Object.entries(content.deductions))line(`${labels[code]??code}: ${money(amount)}`);
  line(`Total deductions: ${money(content.deductionMinor)}`,12);line(`Net payable: ${money(content.netMinor)}`,14);
  if(status==='Draft')line('Draft - pending publication',10);
+ if(content.setupWarnings?.some(warning=>warning.check==='Statutory Configuration'&&warning.severity==='Warning'))line('Provisional net pay: unconfigured statutory deductions are excluded. Review statutory setup.',10);
  return document.save();
 }

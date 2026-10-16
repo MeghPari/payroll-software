@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { attendanceStatuses } from "@/store/operations-store";
+import { attendanceStatuses } from "@/config/employee-options";
 import { createAttendance, updateAttendance } from "@/services/attendance.service";
 import type { AttendanceStatus, DailyAttendanceRecord, Employee } from "@/types";
 import { toast } from "sonner";
