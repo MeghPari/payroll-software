@@ -85,3 +85,10 @@ All 40 individual migrations and the database workflow suites pass in embedded P
 See [test results](../TEST_RESULTS.md), [deployment instructions](DEPLOYMENT_GUIDE.md) and [payroll workflow](PAYROLL_WORKFLOW.md). Local fixture results do not establish production readiness.
 
 Migration 040 combines active-profile, membership, permission and request-quota checks into one authorized database call and supplies verified session context. Earlier schemas retain the existing authorization fallback. Provider outages return retryable errors instead of invalid credentials; requests are bounded and notification refreshes cannot overlap. Project-scoped local sign-out blocks late refreshed cookies even when remote revocation is unavailable.
+
+## 16 October 2026 - Optional setup for salary calculation
+- Migration 041 makes missing bank details and unknown statutory applicability warnings rather than calculation blockers. Employee setup fields remain unchanged; no applicability flags or bank data are invented.
+- Existing configured statutory deductions, attendance/salary coverage, permissions, input freshness and payment bank verification remain enforced. Unconfigured statutory deductions are excluded, and displayed net pay is provisional until reviewed.
+- Validation warnings are captured in each salary snapshot. Shared month selectors show newest first.
+- Apply supabase/upgrade-optional-payroll-setup.sql once after migrations 001-040. Live application is pending user SQL Editor execution.
+- Database fixture verifies exact INR 70,000 calculation in September and October with no bank/statutory records, two warnings and persisted warning snapshots. Existing database regression suite passed.

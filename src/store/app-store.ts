@@ -12,7 +12,7 @@ export const companies: Company[] = [
 ];
 
 const currentDate=companyToday();
-export const payrollMonths=Array.from({length:24},(_,index)=>{const date=new Date(`${currentDate.slice(0,7)}-01T00:00:00Z`);date.setUTCMonth(date.getUTCMonth()-23+index);return monthLabel(date.toISOString().slice(0,7));});
+export const payrollMonths=Array.from({length:24},(_,index)=>{const date=new Date(`${currentDate.slice(0,7)}-01T00:00:00Z`);date.setUTCMonth(date.getUTCMonth()-index);return monthLabel(date.toISOString().slice(0,7));});
 
 interface AppState {
   companyId: string;

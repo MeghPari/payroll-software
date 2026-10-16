@@ -33,6 +33,8 @@ try {
   console.log('PASS tenant visibility, forbidden cross-company writes, employee creation, duplicate prevention, stale versions, forbidden audit forging/deletion, atomic audit');
   await database.exec(await readFile(new URL('../supabase/tests/hr_workflows.sql', import.meta.url), 'utf8'));
   console.log('PASS effective salary history, exact amounts, import rollback, attendance completeness/finalization/correction, leave balances/approval/overlap/overdraw invariants');
+  await database.exec(await readFile(new URL('../supabase/tests/optional_payroll_setup.sql', import.meta.url), 'utf8'));
+  console.log('PASS optional bank/statutory setup: two months calculated, exact net, persisted warnings, no invented employee setup');
   await database.exec(await readFile(new URL('../supabase/tests/payroll_workflows.sql', import.meta.url), 'utf8'));
   console.log('PASS payroll segmentation, exact rounding, duplicate runs, stale input/version rejection, approval and lock transitions, attendance correction protection');
   await database.exec(await readFile(new URL('../supabase/tests/accounting_workflows.sql', import.meta.url), 'utf8'));
