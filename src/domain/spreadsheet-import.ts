@@ -22,7 +22,7 @@ export function sheetRecords(rows:SheetRows):Record<string,string>[] {
  const headers=rows[first].map(cellText),nonempty=headers.filter(Boolean);
  if(new Set(nonempty).size!==nonempty.length)throw new Error('Duplicate column names. Use the monthly grid importer for attendance grids.');
  if(headers.length>100)throw new Error('Too many columns in the import.');
- return rows.slice(first+1).filter(row=>row.some(value=>value!==null&&value!==''&&value!==undefined)).map(row=>Object.fromEntries(headers.filter(Boolean).map(header=>{const index=headers.indexOf(header),value=row[index];if(['DOB','DOJ','Date of Birth (DOB)','Date of Joining (DOJ)','Date of Leaving (DOL)','Date of Birth','Date of Joining','Effective From','Date'].includes(header)&&value!==null&&value!==undefined&&value!=='')return[header,spreadsheetDate(value)??cellText(value)];return[header,cellText(value)];})));
+ return rows.slice(first+1).filter(row=>row.some(value=>value!==null&&value!==''&&value!==undefined)).map(row=>Object.fromEntries(headers.filter(Boolean).map(header=>{const index=headers.indexOf(header),value=row[index];if(['DOB','DOJ','Date of Birth (DOB)','Date of Joining (DOJ)','Date of Leaving (DOL)','Date of Birth','Date of Joining','Joining Date','Effective From','Date'].includes(header)&&value!==null&&value!==undefined&&value!=='')return[header,spreadsheetDate(value)??cellText(value)];return[header,cellText(value)];})));
 }
 
 // Check declared expansion before handing an untrusted ZIP to the XLSX reader.

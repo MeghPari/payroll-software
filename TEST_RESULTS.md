@@ -59,3 +59,7 @@ Migration 042 SQL Editor fix: the user reported Unexpected statutory validation 
 - TypeScript, lint and production build passed (95 generated routes/pages). Payslip/invoice PDF generation tests passed. Production server on local port 3115 passed 43 anonymous-access/origin/redirect checks including new private exports.
 - In-app Browser initialization failed (kernel assets path unavailable); signed-in visual acceptance and live 043 application remain unverified. No actual imports/payments or production salary calculations performed.
 - Dependency audit reports eight high findings in existing developer-tool dependency trees; XLSX reader is not listed. No forced major-version downgrade applied.
+
+## 18 October 2026 - Attendance onboarding (044)
+
+Full npm test passes with 44 migrations, including new employee creation from attendance, same-date records for different unknown codes, conflict/missing-name checks and canonical joining dates. Actual Route Handler + PostgreSQL tests verify new attendance onboarding, duplicate/locked-month rollback and unchanged existing employee attendance. HR creation and ordinary-employee denial are covered in database fixtures; no salary or bank data is invented. Packaged upgrades 043/044 preserve protected financial fixtures exactly. TypeScript and lint pass. Production build passes; live SQL application and signed-in visual acceptance remain pending. No live company records changed.

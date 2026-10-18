@@ -69,5 +69,7 @@ try{
  console.log('PASS optional setup and client-review packages preserve locked payroll, published payslips and posted/paid financial history.');
  await database.exec(await readFile(new URL('../supabase/upgrade-client-templates.sql',import.meta.url),'utf8'));
  for(let index=0;index<financialTables.length;index++){const rows=(await database.query(`select to_jsonb(row) record from public.${financialTables[index]} row`)).rows;if(JSON.stringify(rows)!==JSON.stringify(financialBefore[index]))throw Error('Client templates upgrade rewrote '+financialTables[index]);}
- console.log('PASS client-template upgrade preserves all protected financial fixtures.');
+ await database.exec(await readFile(new URL('../supabase/upgrade-attendance-new-employees.sql',import.meta.url),'utf8'));
+ for(let index=0;index<financialTables.length;index++){const rows=(await database.query(`select to_jsonb(row) record from public.${financialTables[index]} row`)).rows;if(JSON.stringify(rows)!==JSON.stringify(financialBefore[index]))throw Error('New attendance upgrade rewrote '+financialTables[index]);}
+ console.log('PASS client-template and new-attendance-employee upgrades preserve all protected financial fixtures.');
 }catch(error){console.error('Upgrade test failed',{message:error.message,code:error.code});process.exitCode=1;}finally{await database.close();}

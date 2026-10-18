@@ -37,6 +37,11 @@ try{
  validation=await validateAttendanceImport([{...upload,date:'05-10-2026'}],'2026-09');assert.match(validation[0].issues.join(' '),/outside the selected/);
  validation=await validateAttendanceImport([{...upload,date:'31-02-2026'}],'2026-09');assert.match(validation[0].issues.join(' '),/Invalid date/);
  validation=await validateAttendanceImport([upload,{...upload,date:'2026-09-29'}],'2026-09');assert.equal(validation[1].status,'Error');
+ const outside={...upload,employeeId:'NEW1',employeeName:'New Person',joiningDate:'01-09-2026'};
+ validation=await validateAttendanceImport([outside,{...outside,employeeId:'NEW2',employeeName:'Second Person'}],'2026-09');assert.equal(validation[0].status,'Warning');assert.equal(validation[1].status,'Warning');
+ assert.equal((await validateAttendanceImport([{...outside,employeeName:''}],'2026-09'))[0].status,'Error');
+ assert.equal((await validateAttendanceImport([outside,{...outside,date:'2026-09-30',employeeName:'Conflicting Person'}],'2026-09'))[1].status,'Error');
+ await bulkImportAttendance([outside],'2026-09');assert.equal(fixture.saved.newEmployees[0].employeeCode,'NEW1');assert.equal(fixture.saved.newEmployees[0].joiningDate,'2026-09-01');assert.equal(fixture.saved.rows[0].employeeId,'NEW1');
  await bulkImportAttendance([upload],'2026-09');assert.equal(fixture.saved.rows[0].date,'2026-09-29');
  console.log('PASS ISO/Indian date normalization, invalid leap/day rejection, true month mismatches, mixed-format duplicate denial and canonical date submission.');
  console.log('PASS salary view preserves captured paise, versions and payment state without duplicate run reads; attendance reuses supplied employees and respects employment dates, half days and missing punches.');

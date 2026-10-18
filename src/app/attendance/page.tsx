@@ -82,6 +82,7 @@ function AttendanceContent() {
   const companyId=useSessionStore(s=>s.companyId);
   const [tab, setTab] = useState("register");
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [importRevision,setImportRevision]=useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -89,7 +90,7 @@ function AttendanceContent() {
       setEmployees(data);
       setLoading(false);
     }).catch(error=>{setLoading(false);toast.error(error.message);});
-  }, [companyId]);
+  }, [companyId,importRevision]);
 
   return (
     <div>
@@ -119,7 +120,7 @@ function AttendanceContent() {
           <LeaveBalanceTab employees={employees} />
         </TabsContent>
         <TabsContent value="upload" className="mt-4">
-          <UploadAttendanceTab />
+          <UploadAttendanceTab onImported={()=>setImportRevision(value=>value+1)}/>
         </TabsContent>
         <TabsContent value="upload-history" className="mt-4">
           <UploadHistoryTab />
@@ -608,7 +609,7 @@ function BalanceCell({ used, total }: { used: number; total: number }) {
 // Upload Attendance
 // ---------------------------------------------------------------------------
 
-function UploadAttendanceTab() {
+function UploadAttendanceTab({onImported}:{onImported:()=>void}) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -620,7 +621,7 @@ function UploadAttendanceTab() {
         <div>
           <p className="text-sm font-semibold text-foreground">Upload an attendance sheet</p>
           <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
-            Select the payroll month, upload a CSV attendance file, validate the records, and import them into the attendance register.
+            Select the payroll month, upload a CSV or XLSX attendance file, validate the records, and import them into the attendance register.
           </p>
         </div>
         <div className="mt-2 flex gap-2">
@@ -628,7 +629,7 @@ function UploadAttendanceTab() {
           <Button
             variant="outline"
             className="gap-1.5"
-            onClick={() => downloadCSV("attendance_import_template.csv", ATTENDANCE_IMPORT_COLUMNS, [])}
+            onClick={() => downloadCSV("attendance_import_template.csv", [...ATTENDANCE_IMPORT_COLUMNS,"Employee Name","Joining Date"], [])}
           >
             <Download className="h-4 w-4" /> Download Attendance Template
           </Button>
@@ -637,7 +638,7 @@ function UploadAttendanceTab() {
           </Button>
         </div>
       </div>
-      <BulkUploadAttendanceDialog open={open} onOpenChange={setOpen} onImported={() => toast.success("Attendance imported â€” check Today's Attendance / Register tabs.")} />
+      <BulkUploadAttendanceDialog open={open} onOpenChange={setOpen} onImported={onImported} />
     </SectionCard>
   );
 }

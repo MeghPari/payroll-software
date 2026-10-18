@@ -27,7 +27,7 @@ export function clientAttendanceRows(rows:SheetRows,month:string,policy:Attendan
    if(code==='H'&&!policy.holiday)throw new Error('Choose whether H means holiday or weekly off before validating.');
    counts[code]++;
    const status=({P:'Present',WFH:'Work From Home',HD:'Half Day',L:policy.leave,A:'Absent',H:policy.holiday})[code]!;
-   result.push({employeeId,employeeName,date:column.date,status,shift:'',checkIn:'',checkOut:'',workHours:'0',leaveType:code==='L'?'Client attendance leave':'',overtime:'0',remarks:'Client monthly attendance grid'});
+   result.push({employeeId,employeeName,counterCode:cellText(row[2]),counterName:cellText(row[3]),location:cellText(row[4]),state:cellText(row[5]),department:cellText(row[6]),joiningDate:cellText(row[rows[0].findIndex(header=>['Joining Date','Date of Joining (DOJ)','DOJ'].includes(cellText(header)))]),date:column.date,status,shift:'',checkIn:'',checkOut:'',workHours:'0',leaveType:code==='L'?'Client attendance leave':'',overtime:'0',remarks:'Client monthly attendance grid'});
   }
   const labels:Record<string,string>={Present:'P',WFH:'WFH','Half Day':'HD',Leave:'L',Absent:'A'};
   rows[0].forEach((header,position)=>{const code=labels[cellText(header)],value=cellText(row[position]);if(code&&value!==''&&(!/^\d+$/.test(value)||Number(value)!==counts[code]))throw new Error(`Row ${index+1}: ${cellText(header)} summary does not match the daily codes.`);});

@@ -110,3 +110,7 @@ Migration 042 SQL Editor fix: the user reported Unexpected statutory validation 
 ## 18 October 2026 - Client workbook alignment (043)
 
 The user confirmed 042 applied. Client Employee Database, monthly Attendance and Salary Structure workbooks are aligned through XLSX/CSV imports, counter/private fields, DA and client-format exports. L defaults to paid leave; H to holiday including Sundays/weekly offs, per the user. Reviewed client costs and invoice suggestions remain separate from employee payroll and posted accounting. See [template alignment](CLIENT_TEMPLATE_ALIGNMENT.md) for mappings, limits, setup and unresolved source conventions. Apply only supabase/upgrade-client-templates.sql after 042; live application is pending. Original workbooks contain no employee rows and were not imported into the live company.
+
+## 18 October 2026 - Missing employees in attendance uploads (044)
+
+Attendance import now accepts new employee codes with name and reviewed joining date, marks them in preview and creates employees/attendance atomically. Client counter/location/function metadata is retained; salary/bank/statutory setup stays unconfigured. Existing employee-only imports keep their existing permission and RPC path. Migration 044 is packaged separately as supabase/upgrade-attendance-new-employees.sql, to run once after 043. Live application is pending. Tests cover mixed input validation, multiple external codes on the same day, API/database rollback, preserved financial history, HR access and forbidden ordinary-employee imports.
