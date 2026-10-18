@@ -30,3 +30,16 @@ for(const name of ['Salary_Structure.xlsx','Employee_Database.xlsx','Attendance_
  console.log('PASS actual client workbook read and header/date compatibility: '+name);
 }
 console.log('PASS client templates: Excel/day-first dates, monthly code mappings, summary checks, blanks, exact salary components, leading-zero identifiers, duplicate-header denial, 40-column salary mapping and stale-cost exclusion. No live records imported.');
+
+await compile('src/domain/dates.ts','month-dates.mjs');await compile('src/domain/salary-structure-month.ts','structure-month.mjs',{'./dates':'./month-dates.mjs'});
+const{salaryStructureMonth,structureDisplayName}=await import(new URL('structure-month.mjs',out));
+const structures=[{id:'s1',name:'Sample monthly salary - September 2026'},{id:'s2',name:'Other structure'}];
+const employees=[{id:'e1',joiningDate:'2026-09-01'},{id:'e2',joiningDate:'2026-10-15'},{id:'e3',joiningDate:'2026-08-01',exitDate:'2026-09-15'}];
+const revisions=[{employeeId:'e1',structureId:'s1',effectiveFrom:'2026-09-01',revisedGross:70000},{employeeId:'e1',structureId:'s2',effectiveFrom:'2026-10-01',revisedGross:80000},{employeeId:'e1',structureId:'s1',effectiveFrom:'2026-11-01',revisedGross:90000},{employeeId:'e2',structureId:'s1',effectiveFrom:'2026-10-15',revisedGross:60000},{employeeId:'e3',structureId:'s1',effectiveFrom:'2026-08-01',revisedGross:50000}];
+const september=salaryStructureMonth(structures,employees,revisions,'September 2026'),october=salaryStructureMonth(structures,employees,revisions,'October 2026');
+assert.equal(september.structures[0].employeeCount,2);assert.equal(september.assignments.e1.gross,70000);assert.equal(september.assignments.e2,undefined);
+assert.equal(october.structures[0].employeeCount,1);assert.equal(october.structures[1].employeeCount,1);assert.equal(october.assignments.e1.gross,80000);assert.equal(october.assignments.e3,undefined);assert.equal(salaryStructureMonth(structures,employees,revisions,'2026-08').assignments.e1,undefined);
+assert.equal(salaryStructureMonth(structures,employees,revisions,'2026-12').assignments.e1.gross,90000);
+assert.equal(structureDisplayName(structures[0].name),'Sample monthly salary');assert.equal(structureDisplayName('September union agreement'),'September union agreement');assert.equal(structures[0].name,'Sample monthly salary - September 2026');
+assert.equal(salaryStructureMonth(structures,employees,revisions,'2024-02').endDate,'2024-02-29');
+console.log('PASS selected-month salary structures: September/October revisions, future and exited employees, exact counts, stable structure IDs, carry-forward and neutral sample display without changing saved names.');

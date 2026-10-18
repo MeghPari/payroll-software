@@ -63,3 +63,7 @@ Migration 042 SQL Editor fix: the user reported Unexpected statutory validation 
 ## 18 October 2026 - Attendance onboarding (044)
 
 Full npm test passes with 44 migrations, including new employee creation from attendance, same-date records for different unknown codes, conflict/missing-name checks and canonical joining dates. Actual Route Handler + PostgreSQL tests verify new attendance onboarding, duplicate/locked-month rollback and unchanged existing employee attendance. HR creation and ordinary-employee denial are covered in database fixtures; no salary or bank data is invented. Packaged upgrades 043/044 preserve protected financial fixtures exactly. TypeScript and lint pass. Production build passes; live SQL application and signed-in visual acceptance remain pending. No live company records changed.
+
+## 18 October 2026 - Salary structure month selection
+
+Client template tests now verify September/October salary changes, stable structure IDs, correct counts, future joiners/revisions, historical exits, carry-forward, leap-month boundaries and neutral display of the known sample name without mutating saved/custom names. The three source workbook header/date checks still pass. No live salary or structure records changed.

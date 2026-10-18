@@ -20,7 +20,7 @@ const gross=(p:SalaryProfile)=>p.basic+(p.da??0)+p.hra+p.special+p.conveyance+p.
 export async function getSalaryRevisions(employeeId?:string):Promise<SalaryRevision[]> {
  const rows=await salaryAssignments(employeeId);
  return rows.map(row=>{const previous=rows.filter(r=>r.employee_id===row.employee_id&&r.effective_from<row.effective_from).sort((a,b)=>b.effective_from.localeCompare(a.effective_from))[0];const old=previous?gross(profile(previous)):0;const current=profile(row),revised=gross(current);
-  return {id:row.id,employeeId:row.employee_id,previousGross:old,revisedGross:revised,effectiveFrom:row.effective_from,revisionPercent:old?Math.round((revised-old)/old*10000)/100:0,changedBy:row.created_by,changedOn:row.created_at,profile:current};});
+  return {id:row.id,employeeId:row.employee_id,structureId:row.structure_id,previousGross:old,revisedGross:revised,effectiveFrom:row.effective_from,revisionPercent:old?Math.round((revised-old)/old*10000)/100:0,changedBy:row.created_by,changedOn:row.created_at,profile:current};});
 }
 export async function holdSalary(employeeId:string,month:string,reason:string,remarks:string){await tenantApi('salary/holds',{method:'POST',body:JSON.stringify({employeeId,month:monthKey(month),reason,remarks,release:false})});}
 export async function releaseSalary(employeeId:string,month:string,remarks:string){await tenantApi('salary/holds',{method:'POST',body:JSON.stringify({employeeId,month:monthKey(month),reason:remarks,remarks,release:true})});}

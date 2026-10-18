@@ -94,6 +94,7 @@ export interface SalaryProfile {
 }
 
 export interface SalaryRevision {
+  structureId?: string;
   id: string;
   employeeId: string;
   previousGross: number;
