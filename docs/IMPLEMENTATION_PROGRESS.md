@@ -118,3 +118,7 @@ Attendance import now accepts new employee codes with name and reviewed joining 
 ## 18 October 2026 - Salary Structures selected-month fix
 
 Salary Structures now derives assignments, base gross and employee counts from the shared selected month, using effective revisions through month end or exit. Future joiners/revisions and employees who exited before the month are excluded. Counts no longer use the service's placeholder zero. Stable structure IDs identify assignments. The old September sample name displays without its dated suffix; saved names/history are untouched. Custom names are retained. A selected-month Client salary sheet button exposes the existing exact 40-column workbook view/export and reviewed-cost import on this page. Upload Base Salaries is labelled separately from the monthly workbook. No database upgrade is required for this UI fix; the previously supplied 043/044 prerequisites still apply to their respective features.
+
+## 18 October 2026 - Past-date attendance review
+
+Monthly Dates to review, the incomplete-only filter, Up to date count and date editor now share a strict date-before-today cutoff in company time. Today/future dates are excluded; future months show no past dates, and prior months retain full employment-date coverage. Empty review periods do not count as completed registers. Full-month completeness remains separate for payroll/finalization; no dates or statuses are auto-created. No SQL upgrade required.

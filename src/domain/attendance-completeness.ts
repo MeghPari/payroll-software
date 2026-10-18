@@ -13,3 +13,12 @@ export function missingAttendanceDates(month: string, joiningDate: string, exitD
   const completed = new Set(records.filter(row => row.status !== 'Missing Punch').map(row => row.date));
   return employmentDates(month, joiningDate, exitDate).filter(date => !completed.has(date));
 }
+
+export function attendanceReviewDates(month:string,joiningDate:string,exitDate:string|null,today:string):string[]{
+  return employmentDates(month,joiningDate,exitDate).filter(date=>date<today);
+}
+
+export function missingAttendanceReviewDates(month:string,joiningDate:string,exitDate:string|null,records:{date:string;status:string}[],today:string):string[]{
+  const completed=new Set(records.filter(row=>row.status!=='Missing Punch').map(row=>row.date));
+  return attendanceReviewDates(month,joiningDate,exitDate,today).filter(date=>!completed.has(date));
+}

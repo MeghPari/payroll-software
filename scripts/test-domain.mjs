@@ -39,8 +39,21 @@ test('CSV rejects malformed imports',()=>{assert.throws(()=>parseCSV('Name,Name\
 test('CSV export neutralizes formulas and preserves numeric adjustments',()=>{assert.equal(escapeCSV('=HYPERLINK("url")'),'"\'=HYPERLINK(""url"")"');assert.equal(escapeCSV(-100),'-100');});
 test('currency input converts exact decimal amounts and rejects fractions below paise',()=>{assert.equal(toMinor('100.01'),10001);assert.throws(()=>toMinor('1.001'));});
 test('payroll month validates calendar month',()=>{assert.equal(monthKey('October 2026'),'2026-10');assert.throws(()=>monthKey('2026-13'));});
-const { employmentDates,missingAttendanceDates } = await import(new URL('attendance-completeness.mjs',output).href);
+const { employmentDates,missingAttendanceDates,attendanceReviewDates,missingAttendanceReviewDates } = await import(new URL('attendance-completeness.mjs',output).href);
 test('attendance completeness respects joining and exit dates',()=>{assert.deepEqual(employmentDates('2026-09','2026-09-29','2026-09-30'),['2026-09-29','2026-09-30']);assert.deepEqual(employmentDates('2026-09','2026-10-01',null),[]);});
+test('attendance review includes only past employed dates, while finalization keeps the full month',()=>{
+ const today='2026-10-18',rows=[{date:'2026-10-01',status:'Holiday'},{date:'2026-10-02',status:'Missing Punch'},{date:'2026-10-18',status:'Missing Punch'},{date:'2026-10-31',status:'Present'}];
+ assert.equal(attendanceReviewDates('2026-10','2026-10-01',null,today).length,17);
+ assert.equal(missingAttendanceReviewDates('2026-10','2026-10-01',null,rows,today).length,16);
+ assert.ok(missingAttendanceReviewDates('2026-10','2026-10-01',null,rows,today).every(date=>date<today));
+ assert.equal(attendanceReviewDates('2026-11','2026-01-01',null,today).length,0);
+ assert.equal(attendanceReviewDates('2026-09','2026-01-01',null,today).length,30);
+ assert.equal(attendanceReviewDates('2026-10','2026-10-18',null,today).length,0);
+ assert.deepEqual(attendanceReviewDates('2026-10','2026-10-15','2026-10-16',today),['2026-10-15','2026-10-16']);
+ assert.equal(attendanceReviewDates('2026-10','2026-10-01',null,'2026-10-01').length,0);
+ assert.equal(attendanceReviewDates('2026-10','2026-10-01',null,'2026-11-01').length,31);
+ assert.equal(missingAttendanceDates('2026-10','2026-10-01',null,rows).length,29);
+});
 test('attendance completeness includes holidays and unresolved punches',()=>{assert.deepEqual(missingAttendanceDates('2026-09','2026-09-28',null,[{date:'2026-09-28',status:'Weekly Off'},{date:'2026-09-29',status:'Missing Punch'}]),['2026-09-29','2026-09-30']);});
 const { attendanceInput } = await import(new URL('attendance-input.mjs',output).href);
 const attendanceRow={employeeId:'10000000-0000-4000-8000-000000000021',date:'2026-09-01',status:'Present',shift:'',checkIn:'',checkOut:'',workMinutes:0,overtimeMinutes:0,leaveType:'',remarks:''};

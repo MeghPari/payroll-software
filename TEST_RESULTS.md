@@ -67,3 +67,7 @@ Full npm test passes with 44 migrations, including new employee creation from at
 ## 18 October 2026 - Salary structure month selection
 
 Client template tests now verify September/October salary changes, stable structure IDs, correct counts, future joiners/revisions, historical exits, carry-forward, leap-month boundaries and neutral display of the known sample name without mutating saved/custom names. The three source workbook header/date checks still pass. No live salary or structure records changed.
+
+## 18 October 2026 - Attendance review cutoff
+
+37 domain checks and payroll-view fixture tests pass. Added explicit October 18 cutoff tests (October 1-17 only), today/future Missing Punch exclusion, previous/future months, joining/exit boundaries, first-of-month and month rollover. Full-month finalization missing-date checks remain unchanged. Service tests verify separate review and full-month completeness values. No live attendance records changed.
