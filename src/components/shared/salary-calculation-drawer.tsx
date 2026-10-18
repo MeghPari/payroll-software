@@ -108,7 +108,7 @@ export function SalaryCalculationDrawer({ employee, month, open, onOpenChange, s
                   </Section>
 
                   <Section title="C. Earnings">
-                    {Object.entries(calc.earningsBreakdown??{}).map(([code,value])=><Row key={code} label={({basic:'Basic',hra:'HRA',special:'Special Allowance',conveyance:'Conveyance',other:'Other Allowances',bonus:'Bonus',variable:'Variable Pay',overtime:'Overtime',arrears:'Arrears',reimbursement:'Reimbursement'}as Record<string,string>)[code]??code} value={formatINR(value)}/>)}
+                    {Object.entries(calc.earningsBreakdown??{}).map(([code,value])=><Row key={code} label={({basic:'Basic',da:'Dearness Allowance',sunday:'Sunday Amount',incentive:'Incentive (excluding Sunday / OT)',uniformAdvance:'Uniform Advance Recovery',vehicleDamage:'Vehicle Damage Recovery',recovery:'Prior-month Recovery',hra:'HRA',special:'Special Allowance',conveyance:'Conveyance',other:'Other Allowances',bonus:'Bonus',variable:'Variable Pay',overtime:'Overtime',arrears:'Arrears',reimbursement:'Reimbursement'}as Record<string,string>)[code]??code} value={formatINR(value)}/>)}
                   </Section>
 
                   <Section title="D. Attendance Adjustment">

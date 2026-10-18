@@ -4,7 +4,7 @@ export function escapeCSV(value:string|number){
  if(typeof value==='string'&&/^[\s]*[=+\-@]/.test(text))text="'"+text;
  return /[",\r\n]/.test(text)?`"${text.replace(/"/g,'""')}"`:text;
 }
-export function parseCSV(source:string):Record<string,string>[] {
+export function parseCSVMatrix(source:string):string[][] {
  const text=source.replace(/^\uFEFF/,''),records:string[][]=[];
  let record:string[]=[],field='',quoted=false,closed=false;
  const finishField=()=>{record.push(field);field='';closed=false;};
@@ -20,6 +20,10 @@ export function parseCSV(source:string):Record<string,string>[] {
  }
  if(quoted)throw new Error('CSV contains an unterminated quoted field.');
  if(field||record.length||closed)finishRecord();
+ return records;
+}
+export function parseCSV(source:string):Record<string,string>[] {
+ const records=parseCSVMatrix(source);
  if(!records.length)return[];
  const headers=records.shift()!.map(value=>value.trim());
  if(headers.some(value=>!value)||new Set(headers).size!==headers.length)throw new Error('CSV needs unique, nonempty column headers.');

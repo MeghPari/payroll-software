@@ -75,6 +75,7 @@ export interface EmployeeKYC extends EmployeeStatutoryProfile {
 // ---------------------------------------------------------------------------
 
 export interface SalaryProfile {
+  da?:number;
   employeeId: string;
   effectiveFrom: string;
   structure: string;

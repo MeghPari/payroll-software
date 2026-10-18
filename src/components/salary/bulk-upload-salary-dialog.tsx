@@ -6,7 +6,7 @@ import { formatINR } from "@/utils/format";
 import type { ImportRowResult } from "@/types";
 
 const SAMPLE_ROWS: (string | number)[][] = [
-  ["EMP0001", "Arjun Mehta", "2026-06-01", "SVS Employee Structure", "55000", "22000", "10000", "0", "87000", "0", "Yes", "Yes", "200", "1740", "Annual increment"],
+  ["EMP0001", "2026-06-01", "SVS Employee Structure", "55000", "0", "22000", "10000", "0", "0", "Reviewed salary revision"],
 ];
 
 function parseRow(record: Record<string, string>): SalaryImportRow {
@@ -15,6 +15,7 @@ function parseRow(record: Record<string, string>): SalaryImportRow {
     effectiveFrom: record["Effective From"] ?? "",
     structure: record["Salary Structure"] ?? "",
     basic: record["Basic"] ?? "",
+    da: record["DA"],
     hra: record["HRA"] ?? "",
     special: record["Special Allowance"] ?? "",
     other: record["Other Allowance"] ?? "",

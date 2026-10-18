@@ -1,4 +1,6 @@
 "use client";
+import {useState} from 'react';
+import {ClientEmployeeImportDialog} from './client-employee-import-dialog';
 
 import { BulkUploadDialog, type PreviewColumn } from "@/components/shared/bulk-upload-dialog";
 import {
@@ -52,7 +54,8 @@ interface BulkUploadEmployeesDialogProps {
   onImported: () => void;
 }
 
-export function BulkUploadEmployeesDialog({ open, onOpenChange, onImported }: BulkUploadEmployeesDialogProps) {
+export function BulkUploadEmployeesDialog(props:BulkUploadEmployeesDialogProps){const[standard,setStandard]=useState(false);const close=(open:boolean)=>{if(!open)setStandard(false);props.onOpenChange(open);};return standard?<StandardEmployeeImportDialog {...props} onOpenChange={close}/>:<ClientEmployeeImportDialog {...props} onOpenChange={close} onUseStandard={()=>setStandard(true)}/>;}
+function StandardEmployeeImportDialog({ open, onOpenChange, onImported }: BulkUploadEmployeesDialogProps) {
   return (
     <BulkUploadDialog<EmployeeImportRow>
       open={open}

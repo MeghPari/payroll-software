@@ -8,7 +8,7 @@ export class ApiError extends Error {
 export function databaseError(error: { code?: string; message: string } | null) {
   if (!error) return;
   if(error.code===''||['PGRST000','PGRST001','PGRST002','PGRST003'].includes(error.code??''))throw new ApiError(503,'DATABASE_UNAVAILABLE','The database request could not be confirmed. Refresh the records before retrying.');
-  if (['PGRST202','PGRST205','42P01','42883'].includes(error.code ?? '')) throw new ApiError(503,'MIGRATION_REQUIRED','The database needs the latest application migration. Contact your administrator.');
+  if (['PGRST202','PGRST204','PGRST205','42703','42P01','42883'].includes(error.code ?? '')) throw new ApiError(503,'MIGRATION_REQUIRED','The database needs the latest application migration. Contact your administrator.');
   if (error.code === '42501') throw new ApiError(403, 'FORBIDDEN', 'Permission denied.');
   if (error.code === 'P0002') throw new ApiError(404, 'NOT_FOUND', 'Record not found.');
   if (['23505', '40001', '55P03'].includes(error.code ?? '')) throw new ApiError(409, 'CONFLICT', 'Duplicate record or concurrent change. Refresh and retry.');
@@ -38,7 +38,7 @@ export function endpoint(fn: (request: Request) => Promise<Response>) {
     }
   };
 }
-export async function body<T extends z.ZodTypeAny>(request: Request, schema: T): Promise<z.infer<T>> {
+export async function body<T extends z.ZodTypeAny>(request: Request, schema: T,maxBytes=128_000): Promise<z.infer<T>> {
   if (!request.headers.get('content-type')?.startsWith('application/json')) throw new ApiError(415,'CONTENT_TYPE','Use application/json.');
   const reader = request.body?.getReader();
   if (!reader) throw new ApiError(400,'INVALID_JSON','JSON body is required.');
@@ -49,7 +49,7 @@ export async function body<T extends z.ZodTypeAny>(request: Request, schema: T):
       const { done, value } = await reader.read();
       if (done) break;
       size += value.byteLength;
-      if (size > 128_000) { await reader.cancel(); throw new ApiError(413,'BODY_TOO_LARGE','Request body is too large.'); }
+      if (size > maxBytes) { await reader.cancel(); throw new ApiError(413,'BODY_TOO_LARGE','Request body is too large.'); }
       chunks.push(value);
     }
   } finally { reader.releaseLock(); }

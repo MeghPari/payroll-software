@@ -78,8 +78,10 @@ function EmployeesPageContent() {
   const router = useRouter();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
+  const [clientExporting,setClientExporting]=useState(false);
   const [search, setSearch] = useState("");
   const [department, setDepartment] = useState("All");
+  const [counter,setCounter]=useState("All");
   const [location, setLocation] = useState("All");
   const [state, setState] = useState("All");
   const [status, setStatus] = useState(searchParams.get("status") ?? "All");
@@ -121,17 +123,18 @@ function EmployeesPageContent() {
     return employees.filter((e) => {
       if (search) {
         const q = search.toLowerCase();
-        if (!e.fullName.toLowerCase().includes(q) && !e.employeeCode.toLowerCase().includes(q) && !e.email.toLowerCase().includes(q)) {
+        if (!e.fullName.toLowerCase().includes(q) && !e.employeeCode.toLowerCase().includes(q) && !e.email.toLowerCase().includes(q)&&!(e.counterCode??'').toLowerCase().includes(q)&&!(e.counterName??'').toLowerCase().includes(q)) {
           return false;
         }
       }
+      if(counter!=="All"&&(e.counterCode||'Unassigned')!==counter)return false;
       if (department !== "All" && e.department !== department) return false;
       if (location !== "All" && e.workLocation !== location) return false;
       if (state !== "All" && e.state !== state) return false;
       if (status !== "All" && e.status !== status) return false;
       return true;
     });
-  }, [employees, search, department, location, state, status]);
+  }, [employees, search, department, location, state, status,counter]);
 
   const kpis = useMemo(() => {
     const count = (s: EmployeeStatus) => employees.filter((e) => e.status === s).length;
@@ -166,6 +169,8 @@ function EmployeesPageContent() {
     setSelectedIds(new Set());
   }
 
+  async function exportClientDatabase(){setClientExporting(true);try{const response=await fetch('/api/employees/client-export',{headers:{'x-company-id':companyId},credentials:'same-origin',cache:'no-store'});if(!response.ok){const payload=await response.json();throw new Error(payload.error?.message??'Export failed.');}const url=URL.createObjectURL(await response.blob()),link=document.createElement('a');link.href=url;link.download='Employee_Database.csv';document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(error){toast.error(error instanceof Error?error.message:'Unable to export client database.');}finally{setClientExporting(false);}}
+
   const columns: Column<Employee>[] = [
     {
       id: "employee",
@@ -176,13 +181,14 @@ function EmployeesPageContent() {
           <EmployeeAvatar name={row.original.fullName} />
           <div className="min-w-0">
             <p className="truncate font-medium text-foreground">{row.original.fullName}</p>
-            <p className="truncate text-xs text-muted-foreground">{row.original.email}</p>
+            <p className="truncate text-xs text-muted-foreground">{row.original.email||row.original.employeeCode}</p>
           </div>
         </div>
       ),
     },
     { accessorKey: "employeeCode", header: "Employee ID" },
-    { accessorKey: "department", header: "Department" },
+    { accessorKey: "department", header: "Function / Department" },
+    {id:"counter",header:"Counter",accessorFn:employee=>employee.counterCode??'',cell:({row})=><div><p>{row.original.counterCode||'--'}</p><p className="text-xs text-muted-foreground">{row.original.counterName}</p></div>},
     { accessorKey: "designation", header: "Designation" },
     { accessorKey: "state", header: "State" },
     {
@@ -224,6 +230,7 @@ function EmployeesPageContent() {
         subtitle="Manage your organization's employees and their details."
         actions={
           <>
+            {permitted('employees.sensitive')&&permitted('salary.read')&&<Button variant="outline" disabled={clientExporting} onClick={exportClientDatabase}>Export client database</Button>}
             <Button variant="outline" className="gap-1.5" disabled={!permitted('employees.write')} onClick={() => setBulkUploadOpen(true)}>
               <Upload className="h-4 w-4" /> Bulk Upload
             </Button>
@@ -260,7 +267,8 @@ function EmployeesPageContent() {
         <div className="border-b border-border p-4">
           <FilterBar>
             <SearchInput value={search} onChange={setSearch} placeholder="Search by name, ID, email..." className="w-full sm:w-56" />
-            <FilterSelect value={department} onChange={setDepartment} options={["All", ...departments]} placeholder="Department" ariaLabel="Filter by department" />
+            <FilterSelect value={counter} onChange={setCounter} options={["All",...new Set(employees.map(employee=>employee.counterCode||'Unassigned'))]} ariaLabel="Filter by counter" placeholder="Counter"/>
+            <FilterSelect value={department} onChange={setDepartment} options={["All", ...departments]} placeholder="Function / Department" ariaLabel="Filter by function or department" />
             <FilterSelect value={location} onChange={setLocation} options={["All", ...workLocations]} placeholder="Location" ariaLabel="Filter by location" />
             <FilterSelect value={state} onChange={setState} options={["All", ...indianStates]} placeholder="State" ariaLabel="Filter by state" />
             <FilterSelect value={status} onChange={setStatus} options={statusOptions} placeholder="Status" ariaLabel="Filter by status" />

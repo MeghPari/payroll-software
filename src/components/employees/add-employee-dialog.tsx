@@ -26,16 +26,17 @@ import { AlertTriangle, Loader2 } from "lucide-react";
 
 const schema = z.object({
   firstName: z.string().min(1, "First name is required"),
-  lastName: z.string().min(1, "Last name is required"),
-  email: z.string().email("Enter a valid work email"),
-  phone: z.string().min(10, "Enter a valid phone number"),
-  department: z.string().trim().min(1,'Department is required').max(100),
-  designation: z.string().min(1, "Designation is required"),
+  lastName: z.string().max(100),
+  email: z.union([z.literal(""),z.string().email("Enter a valid work email")]),
+  phone: z.union([z.literal(""),z.string().min(10, "Enter a valid phone number")]),
+  department: z.string().trim().max(100),
+  designation: z.string().max(100),
   employmentType: z.enum(["Full-time", "Part-time", "Contractor", "Intern"]),
   category: z.enum(["Permanent", "Contract", "Consultant", "Intern", "Temporary", "Rent Candidate", "Other"]),
   joiningDate: z.string().min(1, "Joining date is required"),
-  workLocation: z.string().min(1, "Work location is required"),
-  state: z.string().min(1, "State is required"),
+  counterCode:z.string().max(80),counterName:z.string().max(160),
+  workLocation: z.string().max(160),
+  state: z.string().max(100),
   uan: z.string().optional(),
 });
 
@@ -70,7 +71,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onCreated, employee }: A
   const category = useWatch({control,name:'category'});
   const uan = useWatch({control,name:'uan'});
   useEffect(() => {
-    if (open) reset(employee ? { firstName:employee.firstName,lastName:employee.lastName,email:employee.email,phone:employee.phone,department:employee.department as FormValues['department'],designation:employee.designation,employmentType:employee.employmentType,category:employee.category??'Permanent',joiningDate:employee.joiningDate,workLocation:employee.workLocation,state:employee.state,uan:employee.statutory.uan??'' } : {firstName:'',lastName:'',email:'',phone:'',department:'',designation:'',employmentType:'Full-time',category:'Permanent',joiningDate:'',workLocation:'',state:'',uan:''});
+    if (open) reset(employee ? { firstName:employee.firstName,lastName:employee.lastName,email:employee.email,phone:employee.phone,department:employee.department as FormValues['department'],designation:employee.designation,employmentType:employee.employmentType,category:employee.category??'Permanent',joiningDate:employee.joiningDate,counterCode:employee.counterCode??'',counterName:employee.counterName??'',workLocation:employee.workLocation,state:employee.state,uan:employee.statutory.uan??'' } : {firstName:'',lastName:'',email:'',phone:'',department:'',designation:'',employmentType:'Full-time',category:'Permanent',joiningDate:'',counterCode:'',counterName:'',workLocation:'',state:'',uan:''});
   }, [open,employee,reset]);
 
   const runUanCheck = useCallback(async (value: string) => {
@@ -104,7 +105,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onCreated, employee }: A
         designation: values.designation,
         joiningDate: values.joiningDate,
         state: values.state,
-        workLocation: values.workLocation,
+        workLocation: values.workLocation,counterCode:values.counterCode,counterName:values.counterName,
         ...(values.uan ? {statutory:{pan:employee?.statutory.pan??'',aadhaar:'',uan:values.uan,esicNumber:employee?.statutory.esicNumber}} : {}),
         employmentType: values.employmentType,
         category: values.category,
@@ -246,6 +247,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onCreated, employee }: A
           </div>
 
           <div className="space-y-1.5">
+            <Label htmlFor="counterCode">Counter Code</Label><Input id="counterCode" {...register("counterCode")}/><Label htmlFor="counterName">Counter Name</Label><Input id="counterName" {...register("counterName")}/>
             <Label htmlFor="uan">UAN Number (optional)</Label>
             <div className="relative">
               <Input id="uan" {...register("uan")} placeholder="100234500129" className={uanCheck.duplicate ? "border-danger pr-9" : "pr-9"} />

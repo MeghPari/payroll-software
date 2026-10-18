@@ -37,6 +37,8 @@ try {
   console.log('PASS optional bank/statutory setup: two months calculated, exact net, persisted warnings, no invented employee setup');
   await database.exec(await readFile(new URL('../supabase/tests/client_review.sql',import.meta.url),'utf8'));
   console.log('PASS account email assignment, confirmed-user/admin restrictions, member visibility and explicitly applicable deductions with partially unset flags');
+  await database.exec(await readFile(new URL('../supabase/tests/client_templates.sql',import.meta.url),'utf8'));
+  console.log('PASS client employee template: mononyms/blank email/counters/private IDs/manager/DA imports, rollback and new monthly recoveries with balanced posting; reviewed client costs leave net unchanged');
   await database.exec(await readFile(new URL('../supabase/tests/payroll_workflows.sql', import.meta.url), 'utf8'));
   console.log('PASS payroll segmentation, exact rounding, duplicate runs, stale input/version rejection, approval and lock transitions, attendance correction protection');
   await database.exec(await readFile(new URL('../supabase/tests/accounting_workflows.sql', import.meta.url), 'utf8'));

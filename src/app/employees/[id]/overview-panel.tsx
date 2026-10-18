@@ -53,7 +53,10 @@ export function OverviewPanel({ employee }: { employee: Employee }) {
 
       <SectionCard title="Employment Snapshot" className="lg:col-span-2">
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <Field label="Department" value={employee.department} />
+          <Field label="Function / Department" value={employee.department} />
+          <Field label="Counter Code" value={employee.counterCode||'--'} />
+          <Field label="Counter Name" value={employee.counterName||'--'} />
+          <Field label="Imported client status" value={employee.clientStatus||employee.status} />
           <Field label="Designation" value={employee.designation} />
           <Field label="Employment Type" value={employee.employmentType} />
           <Field label="Category" value={employee.category ?? "Permanent"} />

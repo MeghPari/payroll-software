@@ -3,7 +3,7 @@ import {employmentDates} from './attendance-completeness';
 export interface IllustrationEmployee{id:string;employee_code:string;first_name:string;last_name:string;joining_date:string;exit_date:string|null;status:string}
 export interface IllustrationSalary{employee_id:string;effective_from:string;employee_salary_component_values:{component_code:string;amount_minor:number}[]}
 export interface IllustrationAttendance{employee_id:string;date:string;status:string}
-const earningCodes=['basic','hra','special','conveyance','other','bonus','variable'];
+const earningCodes=['basic','da','hra','special','conveyance','other','bonus','variable'];
 export function payrollIllustration(month:string,employees:IllustrationEmployee[],salaries:IllustrationSalary[],attendance:IllustrationAttendance[],heldEmployees:string[]){
  const days=employmentDates(month,month+'-01',null),denominator=days.length;
  return employees.filter(employee=>!['Inactive','Salary Hold'].includes(employee.status)).flatMap(employee=>{

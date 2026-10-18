@@ -5,7 +5,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { EmptyState } from "@/components/shared/empty-state";
-import { downloadCSV, formatFileSize, parseCSV, readFileAsText } from "@/lib/csv";
+import { downloadCSV, formatFileSize } from "@/lib/csv";
+import {readImportRecords} from '@/lib/spreadsheet-import';
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Download, UploadCloud, FileSpreadsheet, Loader2, CheckCircle2, X } from "lucide-react";
@@ -34,8 +35,9 @@ interface BulkUploadDialogProps<TRow> {
   templateFileName: string;
   templateColumns: readonly string[];
   sampleRows?: (string | number)[][];
-  /** Maps one parsed CSV row (or one simulated demo row, for .xls/.xlsx) into the domain row shape. */
+  /** Maps a parsed CSV or XLSX row into the domain shape. */
   parseRow: (record: Record<string, string>) => TRow;
+  parseFile?: (file:File)=>Promise<TRow[]>;
   /** Runs validation (typically a service call) and returns per-row status. */
   validateRows: (rows: TRow[]) => Promise<ImportRowResult<TRow>[]>;
   previewColumns: PreviewColumn<ImportRowResult<TRow>>[];
@@ -54,6 +56,7 @@ export function BulkUploadDialog<TRow>({
   templateColumns,
   sampleRows = [],
   parseRow,
+  parseFile,
   validateRows,
   previewColumns,
   onImport,
@@ -68,8 +71,10 @@ export function BulkUploadDialog<TRow>({
   const [importing, setImporting] = useState(false);
   const [uploadRecord, setUploadRecord] = useState<UploadRecord | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const sequence=useRef(0);
 
   function reset() {
+    sequence.current++;
     setStep("template");
     setFile(null);
     setParsing(false);
@@ -86,30 +91,27 @@ export function BulkUploadDialog<TRow>({
 
   const handleFile = useCallback(
     async (selected: File) => {
+      const current=++sequence.current;
       setFile(selected);
+      setRows([]);setResults([]);setUploadRecord(null);setStep('upload');
       setParsing(true);
       try {
-        if(selected.size>2_000_000)throw new Error('CSV files must be under 2 MB.');
-        const isCsv = /\.csv$/i.test(selected.name);
-        let records: Record<string, string>[];
-        if (isCsv) {
-          const text = await readFileAsText(selected);
-          records = parseCSV(text);
-        } else {
-          throw new Error('Please export the spreadsheet as CSV. Binary spreadsheet imports are not supported yet.');
-        }
-        const parsedRows = records.map(parseRow);
+        const parsedRows=parseFile?await parseFile(selected):(await readImportRecords(selected)).map(parseRow);
+        if(current!==sequence.current)return;
+        if(!parsedRows.length)throw new Error('No data rows found. Fill the template before uploading.');
         setRows(parsedRows);
         setStep("preview");
         const validated = await validateRows(parsedRows);
+        if(current!==sequence.current)return;
         setResults(validated);
       } catch(error) {
+        if(current!==sequence.current)return;
         toast.error('Import validation failed', {description:error instanceof Error?error.message:'Please check the file format.'});
       } finally {
-        setParsing(false);
+        if(current===sequence.current)setParsing(false);
       }
     },
-    [parseRow, validateRows]
+    [parseRow, parseFile, validateRows]
   );
 
   function onDrop(e: React.DragEvent) {
@@ -120,6 +122,7 @@ export function BulkUploadDialog<TRow>({
   }
 
   async function handleImport() {
+    if(results.some(row=>row.status==='Error'||row.status==='Duplicate')){toast.error('Resolve all errors before importing.');return;}
     const validRows = results.filter((r) => r.status === "Valid" || r.status === "Warning").map((r) => r.data);
     setImporting(true);
     try {
@@ -218,11 +221,11 @@ export function BulkUploadDialog<TRow>({
             >
               <UploadCloud className="h-8 w-8 text-primary" />
               <p className="text-sm font-medium text-foreground">Drag and drop your file here, or click to browse</p>
-                <p className="text-xs text-muted-foreground">Supports CSV. Export spreadsheets as CSV before uploading.</p>
+                <p className="text-xs text-muted-foreground">Supports CSV and XLSX. Review the validation preview before importing.</p>
               <input
                 ref={inputRef}
                 type="file"
-                  accept=".csv"
+                  accept=".csv,.xlsx"
                 className="hidden"
                 onChange={(e) => {
                   const selected = e.target.files?.[0];
@@ -299,7 +302,7 @@ export function BulkUploadDialog<TRow>({
               <Button variant="outline" onClick={() => setStep("upload")}>
                 Back
               </Button>
-              <Button disabled={results.length === 0 || readyToImport === 0} onClick={() => setStep("summary")}>
+              <Button disabled={results.length === 0 || readyToImport === 0 || errors > 0 || duplicates > 0} onClick={() => setStep("summary")}>
                 Review Summary
               </Button>
             </div>
@@ -317,14 +320,14 @@ export function BulkUploadDialog<TRow>({
             </div>
             {errors + duplicates > 0 && (
               <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-warning ring-1 ring-inset ring-amber-200">
-                {errors + duplicates} row{errors + duplicates === 1 ? "" : "s"} will be skipped due to errors or duplicates. Go back to fix them, or continue to import the remaining valid rows.
+                {errors + duplicates} row{errors + duplicates === 1 ? "" : "s"} need correction. Go back and resolve every error before importing.
               </p>
             )}
             <div className="flex justify-between">
               <Button variant="outline" onClick={() => setStep("preview")}>
                 Back
               </Button>
-              <Button disabled={readyToImport === 0 || importing} onClick={handleImport} className="gap-1.5">
+              <Button disabled={readyToImport === 0 || errors > 0 || duplicates > 0 || importing} onClick={handleImport} className="gap-1.5">
                 {importing && <Loader2 className="h-4 w-4 animate-spin" />}
                 {importing ? "Importing..." : `Import ${readyToImport} Records`}
               </Button>

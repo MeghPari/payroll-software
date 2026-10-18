@@ -4,8 +4,8 @@ import type { Employee, EmployeeFilters, EmploymentStatus, ExitRecord, ImportRow
 
 export type EmployeeCreate = Pick<Employee,'firstName'|'lastName'|'email'|'phone'|'department'|'designation'|'joiningDate'|'workLocation'|'state'|'employmentType'> & Partial<Employee>;
 function input(data: EmployeeCreate) {
-  return { firstName:data.firstName,lastName:data.lastName,email:data.email,phone:data.phone,department:data.department,designation:data.designation,joiningDate:data.joiningDate,workLocation:data.workLocation,state:data.state,employmentType:data.employmentType,category:data.category,employeeCode:data.employeeCode,
-    ...(data.bankDetails ? {bankDetails:data.bankDetails} : {}), ...(data.statutory ? {statutory:{pan:data.statutory.pan,uan:data.statutory.uan,esicNumber:data.statutory.esicNumber}} : {}) };
+  return { firstName:data.firstName,lastName:data.lastName,email:data.email,phone:data.phone,department:data.department,designation:data.designation,joiningDate:data.joiningDate,workLocation:data.workLocation,state:data.state,employmentType:data.employmentType,category:data.category,employeeCode:data.employeeCode,counterCode:data.counterCode,counterName:data.counterName,
+    ...(data.bankDetails ? {bankDetails:data.bankDetails} : {}), ...(data.statutory ? {statutory:{aadhaar:data.statutory.aadhaar,pan:data.statutory.pan,uan:data.statutory.uan,esicNumber:data.statutory.esicNumber}} : {}) };
 }
 export async function getEmployees(filters: EmployeeFilters = {}): Promise<Employee[]> {
   const all: Employee[]=[];
@@ -23,19 +23,20 @@ export async function getEmployees(filters: EmployeeFilters = {}): Promise<Emplo
     (!filters.category || filters.category==='All' || e.category===filters.category));
 }
 interface Detail {
+ clientSalaryReference?:Employee['clientSalaryReference'];
  canReadDocuments:boolean;
  employee:EmployeeRow; bank:{account_holder_name:string;account_number:string;ifsc_code:string;bank_name:string;branch:string}|null;
  statutory:{pan:string|null;uan:string|null;esic_number:string|null}|null;
- personal:{personal_email:string;date_of_birth:string|null;gender:Employee['gender'];address:string;city:string;pincode:string;emergency_contact:Employee['emergencyContact'];blood_group:string;marital_status:Employee['maritalStatus'];nationality:string;languages:string[]}|null;
+ personal:{aadhaar_number?:string;personal_email:string;date_of_birth:string|null;gender:Employee['gender'];address:string;city:string;pincode:string;emergency_contact:Employee['emergencyContact'];blood_group:string;marital_status:Employee['maritalStatus'];nationality:string;languages:string[]}|null;
  history:{id:string;employee_id:string;previous_status:EmploymentStatus;new_status:EmploymentStatus;effective_date:string;reason:string;remarks:string;changed_by:string;created_at:string}[];
 }
 async function detail(id:string) { return tenantApi<Detail>(`employees/detail?id=${encodeURIComponent(id)}`); }
 export async function getEmployeeById(id:string):Promise<Employee|undefined> {
  const data=await detail(id), employee=employeeView(data.employee);
- employee.canReadDocuments=data.canReadDocuments;
+ employee.canReadDocuments=data.canReadDocuments;employee.clientSalaryReference=data.clientSalaryReference;
  if(data.bank) employee.bankDetails={accountHolderName:data.bank.account_holder_name,accountNumber:data.bank.account_number,ifscCode:data.bank.ifsc_code,bankName:data.bank.bank_name,branch:data.bank.branch};
  if(data.statutory) employee.statutory={pan:data.statutory.pan??'',aadhaar:'',uan:data.statutory.uan??undefined,esicNumber:data.statutory.esic_number??undefined};
- if(data.personal) Object.assign(employee,{bloodGroup:data.personal.blood_group??'',maritalStatus:data.personal.marital_status??'',nationality:data.personal.nationality??'',languages:data.personal.languages??[],personalEmail:data.personal.personal_email,dateOfBirth:data.personal.date_of_birth??'',gender:data.personal.gender??'',address:data.personal.address,city:data.personal.city,pincode:data.personal.pincode,emergencyContact:{...employee.emergencyContact,...data.personal.emergency_contact}});
+ if(data.personal){if(employee.statutory)employee.statutory.aadhaar=data.personal.aadhaar_number??'';Object.assign(employee,{bloodGroup:data.personal.blood_group??'',maritalStatus:data.personal.marital_status??'',nationality:data.personal.nationality??'',languages:data.personal.languages??[],personalEmail:data.personal.personal_email,dateOfBirth:data.personal.date_of_birth??'',gender:data.personal.gender??'',address:data.personal.address,city:data.personal.city,pincode:data.personal.pincode,emergencyContact:{...employee.emergencyContact,...data.personal.emergency_contact}});}
  return employee;
 }
 export async function createEmployee(data:EmployeeCreate):Promise<Employee> {

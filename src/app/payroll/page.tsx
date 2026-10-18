@@ -57,6 +57,7 @@ import { formatINR } from "@/utils/format";
 import type { Employee, PayrollCalculation, PayrollExceptionType, PayrollPeriod, PayrollStep, PayrollValidationIssue } from "@/types";
 import { toast } from "sonner";
 
+const ClientSalarySheet=dynamic(()=>import('@/components/payroll/client-salary-sheet').then(module=>module.ClientSalarySheet),{loading:()=> <p role="status">Loading client salary sheet...</p>});
 const PayrollIllustration=dynamic(()=>import('@/components/payroll/payroll-illustration').then(module=>module.PayrollIllustration),{loading:()=> <p role="status" className="p-4 text-sm text-muted-foreground">Loading...</p>});
 const PriorPayrollCorrections=dynamic(()=>import('@/components/payroll/prior-payroll-corrections').then(module=>module.PriorPayrollCorrections),{loading:()=> <p role="status" className="p-4 text-sm text-muted-foreground">Loading...</p>});
 const AdjustmentsPanel=dynamic(()=>import('@/components/payroll/adjustments-panel').then(module=>module.AdjustmentsPanel),{loading:()=> <p role="status" className="p-4 text-sm text-muted-foreground">Loading...</p>});
@@ -84,7 +85,7 @@ function PayrollRunPagePeriodContent({month,onMonthChange}:{month:string;onMonth
   const [finalized, setFinalized] = useState(false);
   const [eligibility, setEligibility] = useState<Record<string, number>>({});
   const [exceptions, setExceptions] = useState<Record<PayrollExceptionType, number>>({} as Record<PayrollExceptionType, number>);
-  const [illustration,setIllustration]=useState(false);
+  const [illustration,setIllustration]=useState(false),[clientSheet,setClientSheet]=useState(false);
   const [validation, setValidation] = useState<PayrollValidationSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -266,6 +267,8 @@ function PayrollRunPagePeriodContent({month,onMonthChange}:{month:string;onMonth
       <div className="mb-4"><Button variant="outline" disabled={!permitted('payroll.run')} onClick={()=>setIllustration(value=>!value)} aria-expanded={illustration}>{illustration?'Close earnings estimate':'Estimate base earnings'}</Button></div>
       {illustration&&<PayrollIllustration key={companyId+monthKey} month={month}/>}
       {!illustration&&<>
+      {permitted('employees.sensitive')&&permitted('salary.read')&&<div className="mb-4"><Button variant="outline" onClick={()=>setClientSheet(value=>!value)} aria-expanded={clientSheet}>{clientSheet?'Hide client salary sheet':'Client salary sheet'}</Button></div>}
+      {clientSheet&&<ClientSalarySheet key={monthKey+period?.version} month={monthKey}/>}
       <PayrollSetupNotice warnings={rows.flatMap(row=>row.setupWarnings??[])} showEmployeeLinks/>
       {rows.length>0&&<PayrollComparison month={monthKey} rows={rows} employees={employees}/>}
       {validation&&<PayrollBlockers issues={validation.issues} employees={employees} onReviewOvertime={()=>{setShowAdjustments(true);requestAnimationFrame(()=>document.getElementById('payroll-adjustments')?.scrollIntoView({behavior:'smooth'}));}}/>}

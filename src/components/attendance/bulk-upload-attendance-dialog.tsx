@@ -1,4 +1,10 @@
 "use client";
+import {useState} from 'react';
+import {Button} from '@/components/ui/button';
+import {downloadCSV} from '@/lib/csv';
+import {readImportSheet,readImportRecords} from '@/lib/spreadsheet-import';
+import {parseCSVMatrix} from '@/domain/csv';
+import {clientAttendanceRows,clientAttendanceTemplate,type AttendanceCodePolicy} from '@/domain/client-attendance';
 
 import { BulkUploadDialog, type PreviewColumn } from "@/components/shared/bulk-upload-dialog";
 import { Label } from "@/components/ui/label";
@@ -44,10 +50,12 @@ interface BulkUploadAttendanceDialogProps {
 }
 
 export function BulkUploadAttendanceDialog({ open, onOpenChange, onImported }: BulkUploadAttendanceDialogProps) {
+  const [leave,setLeave]=useState<AttendanceCodePolicy['leave']>('Paid Leave'),[holiday,setHoliday]=useState<AttendanceCodePolicy['holiday']>('Holiday');
   const month=useAppStore(state=>state.month),setMonth=useAppStore(state=>state.setMonth);
 
   return (
     <BulkUploadDialog<AttendanceImportRow>
+      key={month}
       open={open}
       onOpenChange={onOpenChange}
       title="Upload Attendance"
@@ -56,6 +64,7 @@ export function BulkUploadAttendanceDialog({ open, onOpenChange, onImported }: B
       templateColumns={ATTENDANCE_IMPORT_COLUMNS}
       sampleRows={[]}
       parseRow={parseRow}
+      parseFile={async file=>{if(file.size>2000000)throw new Error('Import files must be under 2 MB.');const matrix=/\.xlsx$/i.test(file.name)?await readImportSheet(file):parseCSVMatrix(await file.text());if(matrix[0]?.[0]==='Employee Code'&&matrix[0]?.[1]==='Employee Name'&&matrix[0]?.[2]==='Counter Code')return clientAttendanceRows(matrix,monthKeyFromLabel(month),{leave,holiday});return(await readImportRecords(file)).map(parseRow);}}
       validateRows={rows=>validateAttendanceImport(rows,monthKeyFromLabel(month))}
       previewColumns={previewColumns}
       onImport={async (rows) => {
@@ -65,8 +74,12 @@ export function BulkUploadAttendanceDialog({ open, onOpenChange, onImported }: B
       }}
       extraField={
         <div className="space-y-1.5">
+          <p className="text-sm text-muted-foreground">Client monthly grids are supported. L means paid leave. H means paid holiday, including Sundays and weekly offs. Blank dates remain unrecorded.</p>
+          <Button variant="outline" onClick={()=>{const template=clientAttendanceTemplate(monthKeyFromLabel(month));downloadCSV('Attendance_Template-'+monthKeyFromLabel(month)+'.csv',template.headers,template.rows);}}>Download client monthly grid</Button>
           <Label>Select Payroll Month</Label>
           <FilterSelect value={month} onChange={setMonth} options={payrollMonths} className="w-full bg-white" />
+          <Label htmlFor="grid-leave">L code</Label><select id="grid-leave" className="h-10 w-full rounded-md border px-3" value={leave??''} onChange={event=>setLeave(event.target.value as AttendanceCodePolicy['leave'])}><option value="">Choose if used</option><option>Paid Leave</option><option>Unpaid Leave</option></select>
+          <Label htmlFor="grid-holiday">H code</Label><select id="grid-holiday" className="h-10 w-full rounded-md border px-3" value={holiday??''} onChange={event=>setHoliday(event.target.value as AttendanceCodePolicy['holiday'])}><option value="">Choose if used</option><option>Holiday</option><option>Weekly Off</option></select>
         </div>
       }
     />

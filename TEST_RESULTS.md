@@ -50,3 +50,12 @@ Final source validation: production build (90 routes/pages), TypeScript, lint wi
 
 
 Migration 042 SQL Editor fix: the user reported Unexpected statutory validation definition. The migration now matches the statutory branch across LF, CRLF, tabs and indentation instead of relying on an exact newline string. The new test-client-upgrade-format.mjs reproduces stored Windows line endings and verifies the complete upgrade in three formatting variants. The prior failed transaction did not commit migration 042; rerun only the updated upgrade-client-review.sql after 041.
+
+## 18 October 2026 - Client workbook alignment
+
+- Full npm test passed across migrations 001-043 and existing workflow/API/domain suites. After further null-version hardening, the database suite and packaged upgrade preservation test passed again.
+- Actual three user-supplied blank XLSX files: exact headers, Excel date cells and empty-data rejection passed. No originals are committed or live records imported.
+- Synthetic client tests: employee private fields/counters/mononyms, DA and effective salary, manager resolution, duplicate/invalid batch rollback, monthly code mapping and summaries, optional bank/stat setup, recovery deductions, exact net and balanced journal posting passed. Reviewed client costs do not change salary; stale/null versions and duplicate/partially invalid cost batches are rejected atomically. Invoice/service-charge suggestion arithmetic and saved-payroll mismatch rejection passed.
+- TypeScript, lint and production build passed (95 generated routes/pages). Payslip/invoice PDF generation tests passed. Production server on local port 3115 passed 43 anonymous-access/origin/redirect checks including new private exports.
+- In-app Browser initialization failed (kernel assets path unavailable); signed-in visual acceptance and live 043 application remain unverified. No actual imports/payments or production salary calculations performed.
+- Dependency audit reports eight high findings in existing developer-tool dependency trees; XLSX reader is not listed. No forced major-version downgrade applied.

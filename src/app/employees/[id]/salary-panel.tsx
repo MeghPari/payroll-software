@@ -66,7 +66,7 @@ export function SalaryPanel({ employee, salary, onChanged }: SalaryPanelProps) {
 
   if (!form) return <Skeleton className="h-64 w-full" />;
 
-  const grossEarnings = form.basic + form.hra + form.special + form.conveyance + form.other + form.bonus + form.variable;
+  const grossEarnings = form.basic + (form.da??0) + form.hra + form.special + form.conveyance + form.other + form.bonus + form.variable;
 
   function set<K extends keyof SalaryProfile>(key: K, value: SalaryProfile[K]) {
     setForm((prev) => (prev ? { ...prev, [key]: value } : prev));
@@ -87,6 +87,7 @@ export function SalaryPanel({ employee, salary, onChanged }: SalaryPanelProps) {
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
       <div className="space-y-4 lg:col-span-2">
+        {employee.clientSalaryReference&&<SectionCard title="Client database salary reference"><p className="mb-3 text-xs text-muted-foreground">S. PF, S. ESI and Total CTC are stored as supplied. They do not determine payroll deductions; their basis and period must be reviewed.</p><div className="grid gap-3 sm:grid-cols-2">{Object.entries({gross_minor:'S. Gross',pf_minor:'S. PF',esi_minor:'S. ESI',ctc_minor:'Total CTC (as supplied)'}).map(([key,label])=>{const amount=employee.clientSalaryReference![key as keyof NonNullable<Employee['clientSalaryReference']>];return <ReadRow key={key} label={label} value={amount===null?'Not supplied':formatINR(Number(amount)/100)}/>;})}</div></SectionCard>}
         <SectionCard title="Salary Profile">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
@@ -118,6 +119,7 @@ export function SalaryPanel({ employee, salary, onChanged }: SalaryPanelProps) {
         <SectionCard title="Earnings">
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
             <NumberField label="Basic" value={form.basic} onChange={(v) => set("basic", v)} />
+            <NumberField label="DA (Dearness Allowance)" value={form.da??0} onChange={(v)=>set("da",v)}/>
             <NumberField label="HRA" value={form.hra} onChange={(v) => set("hra", v)} />
             <NumberField label="Special Allowance" value={form.special} onChange={(v) => set("special", v)} />
             <NumberField label="Conveyance" value={form.conveyance} onChange={(v) => set("conveyance", v)} />

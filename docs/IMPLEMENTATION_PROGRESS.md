@@ -106,3 +106,7 @@ The generated provisional payslip was rendered and visually inspected locally. I
 
 
 Migration 042 SQL Editor fix: the user reported Unexpected statutory validation definition. The migration now matches the statutory branch across LF, CRLF, tabs and indentation instead of relying on an exact newline string. The new test-client-upgrade-format.mjs reproduces stored Windows line endings and verifies the complete upgrade in three formatting variants. The prior failed transaction did not commit migration 042; rerun only the updated upgrade-client-review.sql after 041.
+
+## 18 October 2026 - Client workbook alignment (043)
+
+The user confirmed 042 applied. Client Employee Database, monthly Attendance and Salary Structure workbooks are aligned through XLSX/CSV imports, counter/private fields, DA and client-format exports. L defaults to paid leave; H to holiday including Sundays/weekly offs, per the user. Reviewed client costs and invoice suggestions remain separate from employee payroll and posted accounting. See [template alignment](CLIENT_TEMPLATE_ALIGNMENT.md) for mappings, limits, setup and unresolved source conventions. Apply only supabase/upgrade-client-templates.sql after 042; live application is pending. Original workbooks contain no employee rows and were not imported into the live company.

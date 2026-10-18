@@ -1,6 +1,6 @@
 import { tenantApi } from '@/lib/tenant-api';
 import type { SalaryStructure } from '@/types';
-export const componentCodes=['basic','hra','special','conveyance','other','bonus','variable','loan','advance','otherDeduction','employerOther'] as const;
+export const componentCodes=['basic','da','hra','special','conveyance','other','bonus','variable','loan','advance','otherDeduction','employerOther'] as const;
 interface Row {id:string;name:string;status:SalaryStructure['status'];created_at:string;version:number;salary_structure_components:{component_code:string;calculation_type:string;value_minor:number|null;salary_components:{name:string;kind:string}}[]}
 export async function getSalaryStructures():Promise<SalaryStructure[]> {
  return(await tenantApi<Row[]>('salary-structures')).map(row=>({id:row.id,name:row.name,status:row.status,frequency:'Monthly',createdOn:row.created_at,version:row.version,employeeCount:0,

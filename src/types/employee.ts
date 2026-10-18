@@ -38,6 +38,10 @@ export interface StatutoryDetails {
 }
 
 export interface Employee {
+  counterCode?:string;
+  counterName?:string;
+  clientStatus?:'Active'|'Left'|'Rejoined'|null;
+  clientSalaryReference?:{gross_minor:number|null;pf_minor:number|null;esi_minor:number|null;ctc_minor:number|null};
   canReadDocuments?: boolean;
   managerId?:string|null;
   version?: number;
