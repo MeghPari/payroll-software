@@ -79,3 +79,7 @@ Preview and actual Route Handler/PostgreSQL tests cover pre-joining dates, post-
 ## 19 October 2026 - All-month salary coverage
 
 Database fixtures verify a September first assignment calculates exact July/August salary, carries forward and retains an October mid-month revision with exact paise. Missing bank/statutory records remain warnings and provisional net remains captured. Resolver carries the last revision into future years. The full database suite passes with migration 045; method provenance uses the new carry policy. Packaged upgrade tests preserve locked runs, published payslips, posted journals/invoices and payment evidence exactly. Illustrations and selected-month structure tests cover backward baseline selection without paying before joining dates. Live upgrade application remains pending.
+
+## 19 October 2026 - Workbook salary layout
+
+Rendered the actual ClientTemplateFields React component and compared all 40 displayed fields, in order, with the exact Salary_Structure.xlsx header contract. Generic extra earnings are absent from this display. Existing original-workbook, payroll mapping, import and month-selection checks pass. No saved salary amounts/history changed. Signed-in visual/browser acceptance remains unverified because the browser connection is unavailable in this session.

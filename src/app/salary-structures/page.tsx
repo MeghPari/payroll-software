@@ -1,4 +1,5 @@
 "use client";
+import {ClientTemplateFields} from '@/components/salary/client-template-fields';
 import dynamic from 'next/dynamic';
 import {useAppStore} from '@/store/app-store';
 import {salaryStructureMonth,structureDisplayName} from '@/domain/salary-structure-month';
@@ -36,21 +37,11 @@ import { cn } from "@/lib/utils";
 import { formatINR, pluralize } from "@/utils/format";
 import { toast } from "sonner";
 
-function formatComponentValue(component: SalaryStructure["earnings"][number]) {
-  if (component.calculationType === "Percentage of Basic" || component.calculationType === "Percentage of Gross") {
-    return `${component.value}%`;
-  }
-  if (component.calculationType === "Fixed Amount") {
-    return `₹ ${component.value?.toLocaleString("en-IN")}`;
-  }
-  return "-";
-}
-
 const ClientSalarySheet=dynamic(()=>import('@/components/payroll/client-salary-sheet').then(module=>module.ClientSalarySheet),{loading:()=> <p role="status">Loading client salary sheet...</p>});
 export default function SalaryStructuresPage(){const id=useSessionStore(state=>state.companyId);return <SalaryStructuresPageTenantContent key={id}/>;}
 function SalaryStructuresPageTenantContent() {
   const month=useAppStore(state=>state.month);
-  const [clientSheet,setClientSheet]=useState(false);
+  const [clientSheet,setClientSheet]=useState(true);
   const [savedStructures, setStructures] = useState<SalaryStructure[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [revisions, setRevisions] = useState<SalaryRevision[]>([]);
@@ -103,7 +94,7 @@ function SalaryStructuresPageTenantContent() {
         subtitle={`Salary assignments for ${month}. Structures carry forward until an effective salary change.`}
         actions={
           <>
-            {permitted('payroll.run')&&permitted('employees.sensitive')&&permitted('salary.read')&&<Button variant="outline" onClick={()=>setClientSheet(value=>!value)} aria-expanded={clientSheet}>Client salary sheet - {month}</Button>}
+            {permitted('payroll.run')&&permitted('employees.sensitive')&&permitted('salary.read')&&<Button variant="outline" onClick={()=>setClientSheet(value=>!value)} aria-expanded={clientSheet}>{clientSheet?'Hide':'Show'} salary sheet - {month}</Button>}
             <Button variant="outline" className="gap-1.5" onClick={() => setBulkUploadOpen(true)}>
               <Upload className="h-4 w-4" /> Upload Base Salaries
             </Button>
@@ -115,9 +106,8 @@ function SalaryStructuresPageTenantContent() {
       />
 
       <div className="mb-5 rounded-lg bg-blue-50 px-4 py-3 text-xs text-primary ring-1 ring-inset ring-blue-200">
-        Viewing {month}. A reusable salary structure defines components such as Basic, DA, HRA and Other Allowance. The actual amount for each component is
-        employee-specific — two employees on the same structure can have entirely different gross salaries. Edit an individual employee&apos;s figures
-        under Employees &gt; Salary. The client salary sheet contains the 40 workbook columns, including monthly attendance, deductions, net pay and reviewed client costs.
+        Salary layout: Salary_Structure.xlsx for {month}. Set Basic, DA, HRA and Other Allowance under Employees &gt; Salary. Record Sunday Amount, OT, Incentive and recoveries in monthly salary adjustments. Review employer costs and invoice amounts in the salary sheet.
+
       </div>
 
       {clientSheet&&permitted('employees.sensitive')&&permitted('salary.read')&&<ClientSalarySheet key={month} month={monthKey(month)}/>}
@@ -199,18 +189,7 @@ function SalaryStructuresPageTenantContent() {
               </div>
 
               <div className="space-y-6 p-5">
-                <ComponentTable
-                  title="Earnings"
-                  components={selected.earnings}
-                  onAdd={() => toast.info('Standard earnings are included. Set employee-specific amounts under Salary.')}
-                  addLabel="Add Earning"
-                />
-                <ComponentTable
-                  title="Deductions"
-                  components={selected.deductions}
-                  onAdd={() => toast.info('Standard deductions are included. Configure statutory rules separately.')}
-                  addLabel="Add Deduction"
-                />
+                <ClientTemplateFields/>
 
                 <div>
                   <h3 className="mb-2.5 text-sm font-semibold text-foreground">Employees on this Structure - {month}</h3>
@@ -309,59 +288,6 @@ function SalaryStructuresPageTenantContent() {
       </SectionCard>
 
       <BulkUploadSalaryDialog open={bulkUploadOpen} onOpenChange={setBulkUploadOpen} onImported={refresh} />
-    </div>
-  );
-}
-
-function ComponentTable({
-  title,
-  components,
-  onAdd,
-  addLabel,
-}: {
-  title: string;
-  components: SalaryStructure["earnings"];
-  onAdd: () => void;
-  addLabel: string;
-}) {
-  return (
-    <div>
-      <h3 className="mb-2.5 text-sm font-semibold text-foreground">{title}</h3>
-      <div className="overflow-hidden rounded-lg border border-border">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/50 text-left text-xs font-semibold text-muted-foreground">
-            <tr>
-              <th className="px-4 py-2.5">Component Name</th>
-              <th className="px-4 py-2.5">Type</th>
-              <th className="px-4 py-2.5">Calculation</th>
-              <th className="px-4 py-2.5">Amount</th>
-              <th className="px-4 py-2.5 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {components.map((c) => (
-              <tr key={c.id} className="hover:bg-muted/30">
-                <td className="px-4 py-2.5 font-medium text-foreground">{c.name}</td>
-                <td className="px-4 py-2.5">
-                  <StatusBadge status={c.type} tone={c.type === "Earning" ? "success" : "danger"} />
-                </td>
-                <td className="px-4 py-2.5 text-muted-foreground">{c.calculationType}</td>
-                <td className="px-4 py-2.5">{formatComponentValue(c)}</td>
-                <td className="px-4 py-2.5 text-right">
-                  <div className="inline-flex gap-1">
-                    <Button variant="ghost" size="icon-sm" aria-label={`Edit ${c.name}`}>
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <Button variant="outline" size="sm" className="mt-2.5 gap-1.5" onClick={onAdd}>
-        <Plus className="h-3.5 w-3.5" /> {addLabel}
-      </Button>
     </div>
   );
 }

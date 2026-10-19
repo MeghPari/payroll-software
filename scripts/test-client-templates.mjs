@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';import {readFile,writeFile,mkdir,access} from 'node:fs/promises';import ts from 'typescript';import {readSheet} from 'read-excel-file/node';
 const out=new URL('../.test-output/client-templates-test/',import.meta.url);await mkdir(out,{recursive:true});
-async function compile(path,name,replacements={}){let source=await readFile(new URL('../'+path,import.meta.url),'utf8');for(const[from,to]of Object.entries(replacements))source=source.replaceAll(from,to);await writeFile(new URL(name,out),ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.ESNext}}).outputText);}
+async function compile(path,name,replacements={}){let source=await readFile(new URL('../'+path,import.meta.url),'utf8');for(const[from,to]of Object.entries(replacements))source=source.replaceAll(from,to);await writeFile(new URL(name,out),ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX}}).outputText);}
 await compile('src/domain/attendance-import-date.ts','date.mjs');await compile('src/domain/currency.ts','currency.mjs');await compile('src/domain/client-template-columns.ts','columns.mjs');await compile('src/domain/spreadsheet-import.ts','spreadsheet.mjs',{'./attendance-import-date':'./date.mjs'});await compile('src/domain/client-attendance.ts','attendance.mjs',{'./spreadsheet-import':'./spreadsheet.mjs','./client-template-columns':'./columns.mjs'});await compile('src/domain/client-employee.ts','employee.mjs',{'./currency':'./currency.mjs','./attendance-import-date':'./date.mjs','./spreadsheet-import':'./spreadsheet.mjs'});await compile('src/domain/client-salary-sheet.ts','salary.mjs',{'./client-template-columns':'./columns.mjs'});await compile('src/domain/csv.ts','csv.mjs');
 await compile('src/domain/client-cost-import.ts','cost-import.mjs',{'./currency':'./currency.mjs','./spreadsheet-import':'./spreadsheet.mjs','./client-template-columns':'./columns.mjs'});
 const{clientCostImport}=await import(new URL('cost-import.mjs',out));
@@ -44,3 +44,11 @@ assert.equal(salaryStructureMonth(structures,employees,revisions,'2026-12').assi
 assert.equal(structureDisplayName(structures[0].name),'Sample monthly salary');assert.equal(structureDisplayName('September union agreement'),'September union agreement');assert.equal(structures[0].name,'Sample monthly salary - September 2026');
 assert.equal(salaryStructureMonth(structures,employees,revisions,'2024-02').endDate,'2024-02-29');
 console.log('PASS selected-month salary structures: September/October revisions, future and exited employees, exact counts, stable structure IDs, carry-forward and neutral sample display without changing saved names.');
+
+await compile('src/components/salary/client-template-fields.tsx','template-fields.mjs',{'@/domain/client-template-columns':'./columns.mjs'});
+const React=await import('react'),{renderToStaticMarkup}=await import('react-dom/server'),{ClientTemplateFields}=await import(new URL('template-fields.mjs',out));
+const html=renderToStaticMarkup(React.createElement(ClientTemplateFields));
+const renderedFields=[...html.matchAll(/<td[^>]*>([^<]*)<\/td>/g)].map(match=>match[1]).filter((_,index)=>index%2===0);
+assert.deepEqual(renderedFields,[...CLIENT_SALARY_COLUMNS]);
+for(const extra of ['Bonus','Conveyance','Variable Pay','Special Allowance'])assert.ok(!renderedFields.includes(extra));
+console.log('PASS actual salary structure field table renders all 40 workbook labels in exact order without generic extra earnings.');
