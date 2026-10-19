@@ -122,3 +122,7 @@ Salary Structures now derives assignments, base gross and employee counts from t
 ## 18 October 2026 - Past-date attendance review
 
 Monthly Dates to review, the incomplete-only filter, Up to date count and date editor now share a strict date-before-today cutoff in company time. Today/future dates are excluded; future months show no past dates, and prior months retain full employment-date coverage. Empty review periods do not count as completed registers. Full-month completeness remains separate for payroll/finalization; no dates or statuses are auto-created. No SQL upgrade required.
+
+## 19 October 2026 - Attendance import preflight and diagnostics
+
+The user reported a generic database-validation toast after valid preview. Preview lacked existing-employee joining/leaving checks. It now checks saved employment bounds and period finalization before submission, and shares the row/date/time schema with the server. Revalidation errors identify the affected row; server employment-date failures diagnose the company-scoped code/date and stored joining/leaving boundary. Duplicate and finalized-period errors remain explicit and atomic. No SQL change. July/August originals reused real employee codes and may precede actual employment; separate test-employee files with explicit July 1 joining dates were generated locally and copied to Desktop. No live imports or changes to real employment dates were performed.

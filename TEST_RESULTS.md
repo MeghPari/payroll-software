@@ -71,3 +71,7 @@ Client template tests now verify September/October salary changes, stable struct
 ## 18 October 2026 - Attendance review cutoff
 
 37 domain checks and payroll-view fixture tests pass. Added explicit October 18 cutoff tests (October 1-17 only), today/future Missing Punch exclusion, previous/future months, joining/exit boundaries, first-of-month and month rollover. Full-month finalization missing-date checks remain unchanged. Service tests verify separate review and full-month completeness values. No live attendance records changed.
+
+## 19 October 2026 - Attendance import validation
+
+Preview and actual Route Handler/PostgreSQL tests cover pre-joining dates, post-exit dates, finalized periods and invalid clock times. The server returns the scoped employee code/date and recorded joining date for known employment-boundary failures, without exposing arbitrary database error text. Existing mixed/new employee imports, atomic rollback and locked/duplicate protections remain covered. New local July/August CSVs each contain 62 test records with dedicated codes and explicit July 1 joining dates; originals are unchanged. Live cause remains unverified without the company's saved employee data.
