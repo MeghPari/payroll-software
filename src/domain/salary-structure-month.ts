@@ -13,7 +13,8 @@ export function salaryStructureMonth(structures:SalaryStructure[],employees:Empl
  for(const employee of employees){
   if(employee.joiningDate>end||employee.exitDate&&employee.exitDate<start)continue;
   const cutoff=employee.exitDate&&employee.exitDate<end?employee.exitDate:end;
-  const revision=revisions.filter(row=>row.employeeId===employee.id&&row.effectiveFrom<=cutoff).sort((a,b)=>b.effectiveFrom.localeCompare(a.effectiveFrom))[0];
+  const history=revisions.filter(row=>row.employeeId===employee.id).sort((a,b)=>b.effectiveFrom.localeCompare(a.effectiveFrom));
+  const revision=history.find(row=>row.effectiveFrom<=cutoff)??history.at(-1);
   if(!revision)continue;
   const structure=structures.find(row=>revision.structureId?row.id===revision.structureId:row.name===revision.profile?.structure);
   if(structure)assignments[employee.id]={structureId:structure.id,structure:structure.name,gross:revision.revisedGross,effectiveFrom:revision.effectiveFrom};

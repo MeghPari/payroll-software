@@ -39,6 +39,7 @@ const revisions=[{employeeId:'e1',structureId:'s1',effectiveFrom:'2026-09-01',re
 const september=salaryStructureMonth(structures,employees,revisions,'September 2026'),october=salaryStructureMonth(structures,employees,revisions,'October 2026');
 assert.equal(september.structures[0].employeeCount,2);assert.equal(september.assignments.e1.gross,70000);assert.equal(september.assignments.e2,undefined);
 assert.equal(october.structures[0].employeeCount,1);assert.equal(october.structures[1].employeeCount,1);assert.equal(october.assignments.e1.gross,80000);assert.equal(october.assignments.e3,undefined);assert.equal(salaryStructureMonth(structures,employees,revisions,'2026-08').assignments.e1,undefined);
+assert.equal(salaryStructureMonth(structures,[{...employees[0],joiningDate:'2026-07-01'}],revisions,'2026-07').assignments.e1.gross,70000);
 assert.equal(salaryStructureMonth(structures,employees,revisions,'2026-12').assignments.e1.gross,90000);
 assert.equal(structureDisplayName(structures[0].name),'Sample monthly salary');assert.equal(structureDisplayName('September union agreement'),'September union agreement');assert.equal(structures[0].name,'Sample monthly salary - September 2026');
 assert.equal(salaryStructureMonth(structures,employees,revisions,'2024-02').endDate,'2024-02-29');

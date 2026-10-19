@@ -91,8 +91,8 @@ export function SalaryPanel({ employee, salary, onChanged }: SalaryPanelProps) {
         <SectionCard title="Salary Profile">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label>Effective From</Label>
-              <Input type="date" value={form.effectiveFrom} onChange={(e) => set("effectiveFrom", e.target.value)} />
+              <Label>Salary / revision date</Label>
+              <Input type="date" value={form.effectiveFrom} onChange={(e) => set("effectiveFrom", e.target.value)} /><p className="mt-1 text-xs text-muted-foreground">The first salary applies to every month of employment, including earlier months. Later revisions start on their revision dates.</p>
             </div>
             <div className="space-y-1.5">
               <Label>Salary Structure</Label>

@@ -5,12 +5,13 @@ import { componentCodes,getSalaryStructures } from './salary-structure.service';
 import { getEmployees } from './employee.service';
 import type {SalaryProfile,SalaryRevision,SalaryHold,ImportRowResult,UploadRecord}from '@/types';
 interface Assignment {id:string;employee_id:string;structure_id:string;effective_from:string;remarks:string;created_by:string;created_at:string;salary_structures:{name:string};employee_salary_component_values:{component_code:string;amount_minor:number}[]}
+function assignmentAt(rows:Assignment[],date:string){const history=[...rows].sort((a,b)=>b.effective_from.localeCompare(a.effective_from));return history.find(row=>row.effective_from<=date)??history.at(-1);}
 function profile(row:Assignment):SalaryProfile {
  const amounts=Object.fromEntries(componentCodes.map(code=>[code,0]));for(const item of row.employee_salary_component_values)amounts[item.component_code]=Number(item.amount_minor)/100;
  return {employeeId:row.employee_id,effectiveFrom:row.effective_from,structure:row.salary_structures.name,remarks:row.remarks,...amounts}as SalaryProfile;
 }
 export async function salaryAssignments(employeeId?:string) {return tenantApi<Assignment[]>(`salary${employeeId?`?employeeId=${encodeURIComponent(employeeId)}`:''}`);}
-export async function getSalaryProfile(employeeId:string):Promise<SalaryProfile|undefined> {const row=(await salaryAssignments(employeeId)).find(r=>r.effective_from<=companyToday());return row?profile(row):undefined;}
+export async function getSalaryProfile(employeeId:string):Promise<SalaryProfile|undefined> {const row=assignmentAt(await salaryAssignments(employeeId),companyToday());return row?profile(row):undefined;}
 export async function updateSalaryProfile(employeeId:string,data:SalaryProfile):Promise<SalaryProfile> {
  const structure=(await getSalaryStructures()).find(s=>s.name===data.structure||s.id===data.structure);if(!structure)throw new Error('Choose an active salary structure.');
  const amounts=Object.fromEntries(componentCodes.map(code=>[code,toMinor(data[code]??0)]));
@@ -40,5 +41,5 @@ export async function validateSalaryImport(rows:SalaryImportRow[]):Promise<Impor
 export async function bulkUpdateSalary(rows:SalaryImportRow[]):Promise<UploadRecord> {
  if((await validateSalaryImport(rows)).some(row=>row.status!=='Valid'))throw new Error('Resolve salary import errors.');
  const employees=await getEmployees(),structures=await getSalaryStructures(),assignments=await salaryAssignments();
- return tenantApi('salary/import',{method:'POST',body:JSON.stringify({rows:rows.map(row=>({employeeId:employees.find(e=>e.id===row.employeeId||e.employeeCode===row.employeeId)!.id,structureId:structures.find(s=>s.name===row.structure)!.id,effectiveFrom:row.effectiveFrom,remarks:row.remarks,amounts:Object.fromEntries(componentCodes.map(code=>[code,code==='da'&&!(row.da??'').trim() ? Number(assignments.filter(a=>a.employee_id===employees.find(e=>e.id===row.employeeId||e.employeeCode===row.employeeId)!.id&&a.effective_from<=row.effectiveFrom).sort((a,b)=>b.effective_from.localeCompare(a.effective_from))[0]?.employee_salary_component_values.find(v=>v.component_code==='da')?.amount_minor??0) : toMinor(['basic','da','hra','special','other','variable'].includes(code)?row[code as 'basic']||'0':'0')]))}))})});
+ return tenantApi('salary/import',{method:'POST',body:JSON.stringify({rows:rows.map(row=>({employeeId:employees.find(e=>e.id===row.employeeId||e.employeeCode===row.employeeId)!.id,structureId:structures.find(s=>s.name===row.structure)!.id,effectiveFrom:row.effectiveFrom,remarks:row.remarks,amounts:Object.fromEntries(componentCodes.map(code=>[code,code==='da'&&!(row.da??'').trim() ? Number(assignmentAt(assignments.filter(a=>a.employee_id===employees.find(e=>e.id===row.employeeId||e.employeeCode===row.employeeId)!.id),row.effectiveFrom)?.employee_salary_component_values.find(v=>v.component_code==='da')?.amount_minor??0) : toMinor(['basic','da','hra','special','other','variable'].includes(code)?row[code as 'basic']||'0':'0')]))}))})});
 }

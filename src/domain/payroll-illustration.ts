@@ -13,7 +13,7 @@ export function payrollIllustration(month:string,employees:IllustrationEmployee[
   const issues:string[]=[],numerators=new Map<string,number>();let paidHalfDays=0,missingDates=0,uncoveredSalaryDates=0;
   if(heldEmployees.includes(employee.id))issues.push('Salary is on hold.');
   for(const date of employed){
-   const status=records.get(date),salary=history.find(salary=>salary.effective_from<=date);
+   const status=records.get(date),salary=history.find(salary=>salary.effective_from<=date)??history.at(-1);
    if(!status||status==='Missing Punch')missingDates++;
    const weight=status==='Half Day'?1:['Present','Paid Leave','Work From Home','Weekly Off','Holiday'].includes(status??'')?2:0;
    paidHalfDays+=weight;
@@ -27,7 +27,7 @@ export function payrollIllustration(month:string,employees:IllustrationEmployee[
   }
   if(missingDates)issues.push(missingDates+' attendance date(s) are incomplete.');
   if(uncoveredSalaryDates)issues.push(uncoveredSalaryDates+' employment date(s) have no salary assignment.');
-  const latest=history.find(salary=>salary.effective_from<=employed.at(-1)!);
+  const latest=history.find(salary=>salary.effective_from<=employed.at(-1)!)??history.at(-1);
   const monthlyGrossMinor=latest?sum(latest.employee_salary_component_values.filter(value=>earningCodes.includes(value.component_code)).map(value=>Number(value.amount_minor))):null;
   const baseEarningsMinor=issues.length?null:sum([...numerators.values()].map(value=>ratio(value,1,denominator*2,'half-up')));
   return [{employeeId:employee.id,employeeCode:employee.employee_code,employeeName:employee.first_name+' '+employee.last_name,monthlyGrossMinor,paidDays:missingDates?null:paidHalfDays/2,baseEarningsMinor,netMinor:null,issues}];

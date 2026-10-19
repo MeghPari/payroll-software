@@ -31,7 +31,7 @@ do $$declare c uuid:='e2000000-0000-4000-8000-000000000001';r uuid;v integer;beg
  select id,version into r,v from public.payroll_runs where company_id=c and month='2026-10-01';
  begin perform public.transition_payroll(c,'2026-10-01','approve',v);raise exception 'FAIL legacy calculation approved';exception when serialization_failure then if SQLERRM<>'Payroll calculation method changed; recalculate before approval'then raise;end if;end;
  perform public.calculate_payroll(c,'2026-10-01');select version into v from public.payroll_runs where id=r;
- if not exists(select 1 from public.payroll_calculation_methods where company_id=c and run_id=r and run_version=v and method='exact-proration-v2')then raise exception 'FAIL calculation method provenance';end if;
+ if not exists(select 1 from public.payroll_calculation_methods where company_id=c and run_id=r and run_version=v and method='exact-proration-v3-salary-carry')then raise exception 'FAIL calculation method provenance';end if;
  perform public.transition_payroll(c,'2026-10-01','approve',v);
  begin delete from public.payroll_calculation_methods;raise exception 'FAIL method history forging';exception when insufficient_privilege then null;end;
 end $$;

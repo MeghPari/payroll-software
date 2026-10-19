@@ -75,3 +75,7 @@ Client template tests now verify September/October salary changes, stable struct
 ## 19 October 2026 - Attendance import validation
 
 Preview and actual Route Handler/PostgreSQL tests cover pre-joining dates, post-exit dates, finalized periods and invalid clock times. The server returns the scoped employee code/date and recorded joining date for known employment-boundary failures, without exposing arbitrary database error text. Existing mixed/new employee imports, atomic rollback and locked/duplicate protections remain covered. New local July/August CSVs each contain 62 test records with dedicated codes and explicit July 1 joining dates; originals are unchanged. Live cause remains unverified without the company's saved employee data.
+
+## 19 October 2026 - All-month salary coverage
+
+Database fixtures verify a September first assignment calculates exact July/August salary, carries forward and retains an October mid-month revision with exact paise. Missing bank/statutory records remain warnings and provisional net remains captured. Resolver carries the last revision into future years. The full database suite passes with migration 045; method provenance uses the new carry policy. Packaged upgrade tests preserve locked runs, published payslips, posted journals/invoices and payment evidence exactly. Illustrations and selected-month structure tests cover backward baseline selection without paying before joining dates. Live upgrade application remains pending.

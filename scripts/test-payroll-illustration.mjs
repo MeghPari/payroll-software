@@ -21,6 +21,7 @@ assert.equal(payrollIllustration('2026-09',[employee],[salary,revision],attendan
 const october=Array.from({length:31},(_,index)=>({employee_id:'employee',date:'2026-10-'+String(index+1).padStart(2,'0'),status:'Half Day'}));
 assert.equal(payrollIllustration('2026-10',[employee],[{...salary,employee_salary_component_values:[{component_code:'basic',amount_minor:100003}]}],october,[])[0].baseEarningsMinor,50002);
 assert.equal(payrollIllustration('2026-09',[employee],[salary],attendance.map(row=>({...row,status:'Absent'})),[])[0].baseEarningsMinor,0);
+assert.equal(payrollIllustration('2026-09',[employee],[{...salary,effective_from:'2026-11-01'}, {...revision,effective_from:'2026-12-01'}],attendance,[])[0].baseEarningsMinor,7000000);
 console.log('PASS exact calendar illustration, effective revisions, joining dates, half-day ties, missing-input/hold denial and unknown final net.');
 await writeFile(new URL('env.mjs',out),"export function getEnv(){return {APP_URL:'http://localhost:3000'}}");
 await compile('src/server/http.ts','http.mjs',{'./env':'./env.mjs'});

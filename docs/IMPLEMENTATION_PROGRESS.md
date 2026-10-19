@@ -126,3 +126,9 @@ Monthly Dates to review, the incomplete-only filter, Up to date count and date e
 ## 19 October 2026 - Attendance import preflight and diagnostics
 
 The user reported a generic database-validation toast after valid preview. Preview lacked existing-employee joining/leaving checks. It now checks saved employment bounds and period finalization before submission, and shares the row/date/time schema with the server. Revalidation errors identify the affected row; server employment-date failures diagnose the company-scoped code/date and stored joining/leaving boundary. Duplicate and finalized-period errors remain explicit and atomic. No SQL change. July/August originals reused real employee codes and may precede actual employment; separate test-employee files with explicit July 1 joining dates were generated locally and copied to Desktop. No live imports or changes to real employment dates were performed.
+
+## 19 October 2026 - Salary applies across employment months (045)
+
+Per the user's instruction, first salary assignments now cover all earlier employed dates as well as future months. The payroll resolver selects the latest dated revision on/before the day, falling back to the earliest assignment if none precedes it. Later revisions keep their effective dates. No salary is invented for employees with no assignment; joining/leaving, attendance, optional bank/statutory setup, permissions and payment controls remain enforced. Profiles, illustrations, selected-month structures and employee exports use the same fallback. Source assignment dates and saved financial records are unchanged.
+
+Apply supabase/upgrade-salary-all-months.sql once after 044, then recalculate open months. Existing calculated runs require recalculation before approval under the new method marker; approved/locked payroll and published payslips are preserved. No live schema changes performed by tools.
