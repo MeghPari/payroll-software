@@ -48,5 +48,5 @@ export async function proxy(request: NextRequest) {
   return response;
 }
 export const config = {
-  matcher: ['/((?!api(?:/|$)|auth(?:/|$)|login(?:/|$)|_next/|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff2?)$).*)'],
+  matcher: ['/((?!templates/Attendance_Template[.]xlsx$|api(?:/|$)|auth(?:/|$)|login(?:/|$)|_next/|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff2?)$).*)'],
 };

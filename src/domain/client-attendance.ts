@@ -6,7 +6,8 @@ export function clientAttendanceTemplate(month:string){
  const start=new Date(month+'-01T00:00:00Z');if(Number.isNaN(start.getTime())||start.toISOString().slice(0,7)!==month)throw new Error('Invalid month.');
  const count=new Date(Date.UTC(start.getUTCFullYear(),start.getUTCMonth()+1,0)).getUTCDate();
  const dates=Array.from({length:count},(_,index)=>`${month}-${String(index+1).padStart(2,'0')}`);
- return{headers:[...CLIENT_ATTENDANCE_ID_COLUMNS,...dates.map(date=>new Intl.DateTimeFormat('en-GB',{weekday:'short',timeZone:'UTC'}).format(new Date(date+'T00:00:00Z'))),'Present','WFH','Half Day','Leave','Absent'],rows:[[...Array(7).fill(''),...dates,...Array(5).fill('')]]};
+ const slots=[...dates,...Array(31-count).fill('')];
+ return{headers:[...CLIENT_ATTENDANCE_ID_COLUMNS,...slots.map(date=>date?new Intl.DateTimeFormat('en-GB',{weekday:'short',timeZone:'UTC'}).format(new Date(date+'T00:00:00Z')):''),'Present','WFH','Half Day','Leave','Absent'],rows:[[...Array(7).fill(''),...slots,...Array(5).fill('')]]};
 }
 export function clientAttendanceRows(rows:SheetRows,month:string,policy:AttendanceCodePolicy):AttendanceImportRow[]{
  if(cellText(rows[0]?.[0])!=='Employee Code'||cellText(rows[0]?.[1])!=='Employee Name')throw new Error('Use the client attendance template with Employee Code and Employee Name in row 1.');
@@ -19,6 +20,8 @@ export function clientAttendanceRows(rows:SheetRows,month:string,policy:Attendan
   const row=rows[index];if(!row.some(value=>value!==null&&value!==''&&value!==undefined))continue;
   const employeeId=cellText(row[0]),employeeName=cellText(row[1]);
   if(!employeeId)throw new Error(`Row ${index+1}: Employee Code is required.`);
+  const summaryStart=rows[0].findIndex(header=>cellText(header)==='Present');
+  for(let column=7;column<Math.min(summaryStart>=7?summaryStart:38,38);column++)if(!columns.some(date=>date.index===column)&&cellText(row[column]))throw new Error('Row '+(index+1)+': attendance is entered in a column without a valid date header.');
   const counts:Record<string,number>={P:0,WFH:0,HD:0,L:0,A:0,H:0};
   for(const column of columns){
    const code=cellText(row[column.index]).toUpperCase();if(!code)continue;

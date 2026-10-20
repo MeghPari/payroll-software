@@ -4,10 +4,11 @@ const calendarDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
   const date = new Date(`${value}T00:00:00Z`);
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }, 'Use a valid calendar date.');
+export function normalizeAttendanceStatus(value:string){const trimmed=value.trim();return({P:'Present',A:'Absent',WFH:'Work From Home',HD:'Half Day',L:'Paid Leave',H:'Holiday'} as Record<string,string>)[trimmed.toUpperCase()]??trimmed;}
 const time = z.string().regex(/^(([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?)?$/);
 export const attendanceRowInput = z.object({
     employeeId: z.string().uuid(), date: calendarDate,
-    status: z.enum(['Present','Absent','Paid Leave','Unpaid Leave','Half Day','Weekly Off','Holiday','Work From Home','Missing Punch']),
+    status: z.preprocess(value=>typeof value==='string'?normalizeAttendanceStatus(value):value,z.enum(['Present','Absent','Paid Leave','Unpaid Leave','Half Day','Weekly Off','Holiday','Work From Home','Missing Punch'])),
     shift: z.string().max(100), checkIn: time, checkOut: time,
     workMinutes: z.number().int().min(0).max(1440), overtimeMinutes: z.number().int().min(0).max(1440),
     leaveType: z.string().max(100), remarks: z.string().max(1000),

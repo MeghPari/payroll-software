@@ -1,5 +1,6 @@
 "use client";
 
+import {DesignationInput} from './designation-input';
 import { useForm, Controller,useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -165,7 +166,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onCreated, employee }: A
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="designation">Designation</Label>
-              <Input id="designation" {...register("designation")} placeholder="Software Engineer" />
+              <Controller control={control} name="designation" render={({field})=><DesignationInput id="designation" value={field.value??''} onChange={field.onChange}/>}/>
               {errors.designation && <p className="text-xs text-danger">{errors.designation.message}</p>}
             </div>
           </div>

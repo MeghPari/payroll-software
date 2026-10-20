@@ -50,7 +50,7 @@ try {
  const row={employeeId:employee,date:'2026-09-03',status:'Present',shift:'',checkIn:'',checkOut:'',workMinutes:0,overtimeMinutes:0,leaveType:'',remarks:''};
  const request=(payload,id=company,origin='http://localhost:3000')=>new Request('http://localhost:3000/api/attendance',{method:'POST',headers:{'content-type':'application/json','x-company-id':id,origin},body:JSON.stringify(payload)});
  async function check(handler,payload,status,code,id=company,origin){const response=await handler(request(payload,id,origin));assert.equal(response.status,status);const json=await response.json();if(code)assert.equal(json.error.code,code);return json;}
- await check(attendance.POST,{rows:[row]},200);
+ await check(attendance.POST,{rows:[{...row,status:'P'}]},200);assert.equal((await database.query('select status from public.attendance_records where employee_id=$1 and date=$2',[employee,row.date])).rows[0].status,'Present');
  await check(attendance.POST,{rows:[{...row,status:'Absent'}]},409,'ATTENDANCE_EXISTS');
  await check(attendance.POST,{allowUpdate:true,rows:[row]},422,'VALIDATION_ERROR');
  await check(attendance.POST,{allowUpdate:true,reason:'Approved correction',rows:[{...row,status:'Half Day'}]},200);

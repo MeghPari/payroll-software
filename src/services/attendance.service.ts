@@ -1,7 +1,7 @@
 import{tenantApi}from '@/lib/tenant-api';import{companyToday,monthKey}from '@/domain/dates';import{getEmployees}from './employee.service';import{getAuditTrail}from './audit.service';
 import type{DailyAttendanceRecord,AttendanceStatus,AttendanceSummary,AttendanceRecord,LeaveRequest,LeaveRequestStatus,LeaveBalance,UploadRecord,UploadHistoryRecord,ImportRowResult}from '@/types';
 import { employmentDates,attendanceReviewDates,missingAttendanceReviewDates } from '@/domain/attendance-completeness';
-import { attendanceRowInput } from '@/domain/attendance-input';
+import { attendanceRowInput,normalizeAttendanceStatus } from '@/domain/attendance-input';
 import { normalizeAttendanceImportDate } from '@/domain/attendance-import-date';
 interface Row{scheduled_start?:string|null;id:string;employee_id:string;date:string;status:AttendanceStatus;shift:string;check_in:string|null;check_out:string|null;work_minutes:number;overtime_minutes:number;leave_type:string;remarks:string;source:string;modified_by:string;modified_at:string}
 function view(row:Row):DailyAttendanceRecord{return{scheduledStart:row.scheduled_start??null,id:row.id,employeeId:row.employee_id,date:row.date,status:row.status,shift:row.shift,checkIn:row.check_in?.slice(0,5)??'',checkOut:row.check_out?.slice(0,5)??'',workHours:row.work_minutes/60,overtime:row.overtime_minutes/60,leaveType:row.leave_type,remarks:row.remarks,source:row.source,modifiedBy:row.modified_by,modifiedOn:row.modified_at};}
@@ -33,19 +33,19 @@ export async function updateLeaveRequestStatus(id:string,status:LeaveRequestStat
 export async function getLeaveBalances():Promise<LeaveBalance[]>{const rows=(await getLeaveData()).balances.filter(r=>r.period_start<=companyToday()&&r.period_end>=companyToday()),ids=Array.from(new Set(rows.map(r=>r.employee_id)));return ids.map(employeeId=>{const balance=(name:string)=>{const row=rows.find(r=>r.employee_id===employeeId&&r.leave_types.name===name);return{total:Number(row?.allocated_days??0),used:Number(row?.used_days??0)};};return{employeeId,casualLeave:balance('Casual Leave'),sickLeave:balance('Sick Leave'),earnedLeave:balance('Earned Leave')};});}
 export async function getUploadHistory():Promise<UploadHistoryRecord[]>{return tenantApi('attendance/imports');}
 export const ATTENDANCE_IMPORT_COLUMNS=['Employee ID','Date','Shift','Check-In','Check-Out','Work Hours','Attendance Status','Leave Type','Overtime','Remarks']as const;
-export interface AttendanceImportRow{employeeId:string;employeeName?:string;joiningDate?:string;counterCode?:string;counterName?:string;location?:string;state?:string;department?:string;date:string;shift:string;checkIn:string;checkOut:string;workHours:string;status:string;leaveType:string;overtime:string;remarks:string}
+export interface AttendanceImportRow{employeeId:string;employeeName?:string;joiningDate?:string;designation?:string;counterCode?:string;counterName?:string;location?:string;state?:string;department?:string;date:string;shift:string;checkIn:string;checkOut:string;workHours:string;status:string;leaveType:string;overtime:string;remarks:string}
 const statuses=['Present','Absent','Paid Leave','Unpaid Leave','Half Day','Weekly Off','Holiday','Work From Home','Missing Punch'];
 export function attendanceEmployeeDraft(row:AttendanceImportRow){
  const name=(row.employeeName??'').trim().replace(/\s+/g,' '),joiningDate=normalizeAttendanceImportDate(row.joiningDate??'');
  if(!/^[A-Za-z0-9_-]{1,40}$/.test(row.employeeId))throw new Error('New employees need an Employee Code of up to 40 letters, numbers, underscores or hyphens.');
  if(!name||name.split(' ')[0].length>100||name.split(' ').slice(1).join(' ').length>100)throw new Error('Supply Employee Name for the new employee.');
  if(!joiningDate)throw new Error('Supply the new employee joining date in the file or upload settings.');
- return{employeeCode:row.employeeId,employeeName:name,joiningDate,counterCode:row.counterCode??'',counterName:row.counterName??'',workLocation:row.location??'',state:row.state??'',department:row.department??''};
+ return{employeeCode:row.employeeId,employeeName:name,joiningDate,designation:row.designation??'Other',counterCode:row.counterCode??'',counterName:row.counterName??'',workLocation:row.location??'',state:row.state??'',department:row.department??''};
 }
 export async function validateAttendanceImport(rows:AttendanceImportRow[],month:string):Promise<ImportRowResult<AttendanceImportRow>[]> {
  const[employees,existing,finalized]=await Promise.all([getEmployees(),records('month='+monthKey(month)),isAttendanceFinalized(month)]),seen=new Set(existing.map(r=>r.employeeId+'/'+r.date)),drafts=new Map<string,string>();
  return rows.map((input,index)=>{
-  const normalized=normalizeAttendanceImportDate(input.date),data={...input,date:normalized??input.date},issues:string[]=[],employee=employees.find(e=>e.employeeCode===data.employeeId||e.id===data.employeeId);
+  const normalized=normalizeAttendanceImportDate(input.date),data={...input,status:normalizeAttendanceStatus(input.status),date:normalized??input.date},issues:string[]=[],employee=employees.find(e=>e.employeeCode===data.employeeId||e.id===data.employeeId);
   if(!employee){try{const draft=attendanceEmployeeDraft(data),signature=JSON.stringify(draft),previous=drafts.get(data.employeeId);if(previous&&previous!==signature)issues.push('Conflicting name, joining date or details for this new employee.');drafts.set(data.employeeId,signature);if(normalized&&draft.joiningDate>normalized)issues.push('Attendance precedes the new employee joining date.');}catch(error){issues.push(error instanceof Error?error.message:'Invalid new employee details.');}}
   if(employee&&input.employeeName&&input.employeeName.trim().replace(/\s+/g,' ').toLowerCase()!==employee.fullName.trim().replace(/\s+/g,' ').toLowerCase())issues.push('Employee name does not match the employee code in this company.');
   if(finalized)issues.push('This month is finalized. Reopen it through attendance review before importing.');

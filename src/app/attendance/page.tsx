@@ -629,7 +629,7 @@ function UploadAttendanceTab({onImported}:{onImported:()=>void}) {
           <Button
             variant="outline"
             className="gap-1.5"
-            onClick={() => downloadCSV("attendance_import_template.csv", [...ATTENDANCE_IMPORT_COLUMNS,"Employee Name","Joining Date"], [])}
+            onClick={() => {const link=document.createElement("a");link.href="/templates/Attendance_Template.xlsx";link.download="Attendance_Template.xlsx";link.click();}}
           >
             <Download className="h-4 w-4" /> Download Attendance Template
           </Button>

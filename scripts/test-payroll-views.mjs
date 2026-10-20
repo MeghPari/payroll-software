@@ -33,7 +33,9 @@ try{
  assert.equal(normalizeAttendanceImportDate('05-10-2026'),'2026-10-05');assert.equal(normalizeAttendanceImportDate('5/10/2026'),'2026-10-05');assert.equal(normalizeAttendanceImportDate('2026-10-05'),'2026-10-05');assert.equal(normalizeAttendanceImportDate('31-02-2026'),null);assert.equal(normalizeAttendanceImportDate('29-02-2024'),'2024-02-29');
  fixture.attendance=[];
  const upload={employeeId:'employee',date:'29-09-2026',shift:'General',checkIn:'09:00',checkOut:'17:00',workHours:'8',status:'Present',leaveType:'',overtime:'0',remarks:'Fixture'};
- let validation=await validateAttendanceImport([upload],'2026-09');assert.equal(validation[0].status,'Valid');assert.equal(validation[0].data.date,'2026-09-29');
+ let validation=await validateAttendanceImport([{...upload,status:'P'}],'2026-09');assert.equal(validation[0].status,'Valid');assert.equal(validation[0].data.status,'Present');
+ validation=await validateAttendanceImport([{...upload,status:'a'}],'2026-09');assert.equal(validation[0].data.status,'Absent');
+ validation=await validateAttendanceImport([upload],'2026-09');assert.equal(validation[0].status,'Valid');assert.equal(validation[0].data.date,'2026-09-29');
  validation=await validateAttendanceImport([{...upload,date:'2026-07-01'}],'2026-07');assert.match(validation[0].issues.join(' '),/before joining date 2026-09-29/);
  validation=await validateAttendanceImport([{...upload,date:'2026-10-01'}],'2026-10');assert.match(validation[0].issues.join(' '),/after leaving date 2026-09-30/);
  fixture.period={finalized_at:'2026-10-01'};validation=await validateAttendanceImport([upload],'2026-09');assert.match(validation[0].issues.join(' '),/month is finalized/);fixture.period=null;

@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getSalaryStructures } from "@/services/payroll.service";
+import {tenantApi} from '@/lib/tenant-api';
 import { updateSalaryProfile } from "@/services/salary.service";
 import { calculatePayrollPreview } from "@/services/payroll.service";
 import { companyToday,monthLabel } from '@/domain/dates';
@@ -44,6 +45,7 @@ function ReadRow({ label, value, emphasis }: { label: string; value: string; emp
 
 export function SalaryPanel({ employee, salary, onChanged }: SalaryPanelProps) {
   const [structures, setStructures] = useState<SalaryStructure[]>([]);
+  const [designationDate,setDesignationDate]=useState(companyToday()),[applyingDesignation,setApplyingDesignation]=useState(false);
   const [form, setForm] = useState<SalaryProfile | undefined>(salary);
   const [saving, setSaving] = useState(false);
   const [calc, setCalc] = useState<PayrollCalculation | undefined>(undefined);
@@ -87,6 +89,7 @@ export function SalaryPanel({ employee, salary, onChanged }: SalaryPanelProps) {
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
       <div className="space-y-4 lg:col-span-2">
+        <SectionCard title="Salary by designation" subtitle={employee.designation||'Other / Custom'}><p className="text-sm text-muted-foreground">New employees receive a matching designation preset automatically. To replace an existing custom salary, review the revision date below. Other / Custom uses the manual amount fields.</p><div className="mt-3 flex flex-wrap items-end gap-3"><div><Label>Designation salary revision date</Label><Input type="date" value={designationDate} onChange={event=>setDesignationDate(event.target.value)}/></div><Button disabled={applyingDesignation||!permitted('salary.write')} onClick={async()=>{setApplyingDesignation(true);try{await tenantApi('designation-salaries',{method:'POST',body:JSON.stringify({action:'use',employeeId:employee.id,effectiveDate:designationDate,expectedVersion:employee.version})});toast.success('Designation salary assigned');onChanged();}catch(error){toast.error(error instanceof Error?error.message:'Unable to apply designation salary.');}finally{setApplyingDesignation(false);}}}>Use designation salary</Button></div></SectionCard>
         {employee.clientSalaryReference&&<SectionCard title="Client database salary reference"><p className="mb-3 text-xs text-muted-foreground">S. PF, S. ESI and Total CTC are stored as supplied. They do not determine payroll deductions; their basis and period must be reviewed.</p><div className="grid gap-3 sm:grid-cols-2">{Object.entries({gross_minor:'S. Gross',pf_minor:'S. PF',esi_minor:'S. ESI',ctc_minor:'Total CTC (as supplied)'}).map(([key,label])=>{const amount=employee.clientSalaryReference![key as keyof NonNullable<Employee['clientSalaryReference']>];return <ReadRow key={key} label={label} value={amount===null?'Not supplied':formatINR(Number(amount)/100)}/>;})}</div></SectionCard>}
         <SectionCard title="Salary Profile">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

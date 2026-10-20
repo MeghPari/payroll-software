@@ -33,6 +33,7 @@ interface BulkUploadDialogProps<TRow> {
   title: string;
   description: string;
   templateFileName: string;
+  onDownloadTemplate?:()=>void;
   templateColumns: readonly string[];
   sampleRows?: (string | number)[][];
   /** Maps a parsed CSV or XLSX row into the domain shape. */
@@ -53,6 +54,7 @@ export function BulkUploadDialog<TRow>({
   title,
   description,
   templateFileName,
+  onDownloadTemplate,
   templateColumns,
   sampleRows = [],
   parseRow,
@@ -179,8 +181,8 @@ export function BulkUploadDialog<TRow>({
             <div className="rounded-lg border border-border bg-muted/30 p-4">
               <p className="text-sm font-medium text-foreground">Template columns</p>
               <div className="mt-2.5 flex flex-wrap gap-1.5">
-                {templateColumns.map((c) => (
-                  <span key={c} className="rounded-full bg-white px-2.5 py-0.5 text-xs text-muted-foreground ring-1 ring-inset ring-border">
+                {templateColumns.map((c,index) => (
+                  <span key={index} className="rounded-full bg-white px-2.5 py-0.5 text-xs text-muted-foreground ring-1 ring-inset ring-border">
                     {c}
                   </span>
                 ))}
@@ -190,7 +192,7 @@ export function BulkUploadDialog<TRow>({
               variant="outline"
               className="w-full gap-1.5"
               onClick={() => {
-                downloadCSV(templateFileName, templateColumns, sampleRows);
+                if(onDownloadTemplate)onDownloadTemplate();else downloadCSV(templateFileName, templateColumns, sampleRows);
                 toast.success("Template downloaded");
               }}
             >

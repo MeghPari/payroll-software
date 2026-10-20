@@ -1,4 +1,5 @@
 "use client";
+import {DesignationSalaryPresets} from '@/components/salary/designation-salary-presets';
 import {ClientTemplateFields} from '@/components/salary/client-template-fields';
 import dynamic from 'next/dynamic';
 import {useAppStore} from '@/store/app-store';
@@ -105,6 +106,7 @@ function SalaryStructuresPageTenantContent() {
         }
       />
 
+      {permitted('salary.read')&&<DesignationSalaryPresets onChanged={refresh} onCustom={()=>{setEditing(null);setDialogOpen(true);}}/>}
       <div className="mb-5 rounded-lg bg-blue-50 px-4 py-3 text-xs text-primary ring-1 ring-inset ring-blue-200">
         Salary layout: Salary_Structure.xlsx for {month}. Set Basic, DA, HRA and Other Allowance under Employees &gt; Salary. Record Sunday Amount, OT, Incentive and recoveries in monthly salary adjustments. Review employer costs and invoice amounts in the salary sheet.
 
