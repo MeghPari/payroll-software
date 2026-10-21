@@ -48,7 +48,7 @@ const previewColumns: PreviewColumn<ImportRowResult<AttendanceImportRow>>[] = [
 interface BulkUploadAttendanceDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onImported: () => void;
+  onImported: (count: number) => void;
 }
 
 export function BulkUploadAttendanceDialog({ open, onOpenChange, onImported }: BulkUploadAttendanceDialogProps) {
@@ -73,7 +73,7 @@ export function BulkUploadAttendanceDialog({ open, onOpenChange, onImported }: B
       previewColumns={previewColumns}
       onImport={async (rows) => {
         const record = await bulkImportAttendance(rows, monthKeyFromLabel(month));
-        onImported();
+        onImported(rows.length);
         return record;
       }}
       extraField={

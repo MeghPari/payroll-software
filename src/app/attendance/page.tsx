@@ -120,7 +120,7 @@ function AttendanceContent() {
           <LeaveBalanceTab employees={employees} />
         </TabsContent>
         <TabsContent value="upload" className="mt-4">
-          <UploadAttendanceTab onImported={()=>setImportRevision(value=>value+1)}/>
+          <UploadAttendanceTab onImported={()=>setImportRevision(value=>value+1)} onReview={()=>setTab("register")}/>
         </TabsContent>
         <TabsContent value="upload-history" className="mt-4">
           <UploadHistoryTab />
@@ -609,11 +609,14 @@ function BalanceCell({ used, total }: { used: number; total: number }) {
 // Upload Attendance
 // ---------------------------------------------------------------------------
 
-function UploadAttendanceTab({onImported}:{onImported:()=>void}) {
+function UploadAttendanceTab({onImported,onReview}:{onImported:()=>void;onReview:()=>void}) {
+  const month=useAppStore(state=>state.month);
+  const [success,setSuccess]=useState<{month:string;count:number}|null>(null);
   const [open, setOpen] = useState(false);
 
   return (
     <SectionCard>
+      {success?.month===month&&<div role="status" aria-live="polite" className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4"><div className="flex items-center gap-3"><CheckCircle2 className="h-6 w-6 text-emerald-700"/><div><p className="font-semibold text-emerald-900">Uploaded successfully</p><p className="text-sm text-emerald-800">{success.count} attendance records imported for {success.month}.</p></div></div><Button variant="outline" onClick={onReview}>Review attendance</Button></div>}
       <div className="flex flex-col items-center gap-3 py-8 text-center">
         <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-50 text-primary">
           <UploadCloud className="h-6 w-6" />
@@ -638,7 +641,7 @@ function UploadAttendanceTab({onImported}:{onImported:()=>void}) {
           </Button>
         </div>
       </div>
-      <BulkUploadAttendanceDialog open={open} onOpenChange={setOpen} onImported={onImported} />
+      <BulkUploadAttendanceDialog open={open} onOpenChange={setOpen} onImported={count=>{setSuccess({month,count});onImported();}} />
     </SectionCard>
   );
 }
