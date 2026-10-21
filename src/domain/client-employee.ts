@@ -26,6 +26,15 @@ export const clientEmployeeInput=z.object({
  }else if(row.salaryReference.grossMinor!==null)ctx.addIssue({code:'custom',message:'Supply the structured component split as well as S. Gross.'});
 });
 export type ClientEmployeeInput=z.infer<typeof clientEmployeeInput>;
+export const employeeDatasetInput=clientEmployeeInput.superRefine((row,ctx)=>{
+ if(!row.amounts)ctx.addIssue({code:'custom',message:'Supply Structured Basic, S. DA, S. HRA and S. Other Allowance. Enter 0 where a component does not apply.'});
+});
+export function parseEmployeeDataset(row:ClientEmployeeRow):ClientEmployeeInput{
+ for(const key of ['Structured Basic','S. DA','S. HRA','S. Other Allowance']){
+  if(!(row.record[key]??'').trim())throw new Error(`${key} is required. Enter 0 if it does not apply.`);
+ }
+ return employeeDatasetInput.parse(parseClientEmployee(row));
+}
 export interface ClientEmployeeRow{record:Record<string,string>;salaryEffectiveFrom:string}
 export function parseClientEmployee(row:ClientEmployeeRow):ClientEmployeeInput{
  const r=row.record,value=(key:string)=>{const raw=(r[key]??'').trim();return ['Date of Birth (DOB)','Date of Joining (DOJ)','Date of Leaving (DOL)'].includes(key)&&raw?spreadsheetDate(raw)??raw:raw;},amount=(key:string)=>value(key)===''?null:toMinor(value(key));

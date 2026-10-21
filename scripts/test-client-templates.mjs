@@ -31,6 +31,12 @@ for(const name of ['Salary_Structure.xlsx','Employee_Database.xlsx','Attendance_
 }
 console.log('PASS client templates: Excel/day-first dates, monthly code mappings, summary checks, blanks, exact salary components, leading-zero identifiers, duplicate-header denial, 40-column salary mapping and stale-cost exclusion. No live records imported.');
 
+const{parseEmployeeDataset}=await import(new URL('employee.mjs',out));
+assert.equal(parseEmployeeDataset({record,salaryEffectiveFrom:'joining'}).amounts.basic,1000000);
+assert.throws(()=>parseEmployeeDataset({record:{...record,'S. DA':''},salaryEffectiveFrom:'joining'}),/S. DA is required/);
+assert.equal(parseEmployeeDataset({record:{...record,'S. DA':'0','S. Gross':'14000'},salaryEffectiveFrom:'joining'}).amounts.da,0);
+console.log('PASS employee dataset requires explicit components, accepts zero and retains exact paise.');
+
 await compile('src/domain/dates.ts','month-dates.mjs');await compile('src/domain/salary-structure-month.ts','structure-month.mjs',{'./dates':'./month-dates.mjs'});
 const{salaryStructureMonth,structureDisplayName}=await import(new URL('structure-month.mjs',out));
 const structures=[{id:'s1',name:'Sample monthly salary - September 2026'},{id:'s2',name:'Other structure'}];

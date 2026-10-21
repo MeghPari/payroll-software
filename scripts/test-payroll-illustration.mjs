@@ -36,7 +36,7 @@ const q={select(){return q},eq(key,value){filters.push(row=>row[key]===value);re
 `);
 await compile('src/app/api/payroll/illustration/route.ts','route.mjs',{'@/server/auth':'./auth.mjs','@/server/http':'./http.mjs','@/domain/payroll-illustration':'./illustration.mjs'});
 const {GET}=await import(new URL('route.mjs',out));
-globalThis.illustrationFixture={readAllowed:true,tables:{employees:[{...employee,company_id:'fixture'},{...employee,id:'foreign',first_name:'FOREIGN',company_id:'other'}],employee_salary_assignments:[{...salary,company_id:'fixture'}],attendance_records:attendance.map(row=>({...row,company_id:'fixture'})),salary_holds:[]}};
+globalThis.illustrationFixture={readAllowed:true,tables:{employees:[{...employee,company_id:'fixture'},{...employee,id:'foreign',first_name:'FOREIGN',company_id:'other'}],employee_salary_assignments:[{...salary,company_id:'fixture',dataset_salary:true},{...salary,company_id:'fixture',dataset_salary:false,employee_salary_component_values:[{component_code:'basic',amount_minor:99999999}]}],attendance_records:attendance.map(row=>({...row,company_id:'fixture'})),salary_holds:[]}};
 try{
  const request=company=>new Request('http://localhost:3000/api/payroll/illustration?month=2026-09',{headers:{'x-company-id':company}});
  const before=JSON.stringify(globalThis.illustrationFixture.tables);const response=await GET(request('fixture'));assert.equal(response.status,200);

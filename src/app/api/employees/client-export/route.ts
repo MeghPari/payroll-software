@@ -7,7 +7,7 @@ export const GET=endpoint(async request=>{
   allRows((first,last)=>client.from('employee_private_details').select('employee_id,date_of_birth,gender,marital_status,aadhaar_number').eq('company_id',companyId).order('employee_id').range(first,last)),
   allRows((first,last)=>client.from('employee_statutory_details').select('employee_id,pan,uan,esic_number').eq('company_id',companyId).order('employee_id').range(first,last)),
   allRows((first,last)=>client.from('employee_bank_details').select('employee_id,account_number,ifsc_code').eq('company_id',companyId).order('employee_id').range(first,last)),
-  allRows((first,last)=>client.from('employee_salary_assignments').select('employee_id,effective_from,id,employee_salary_component_values(component_code,amount_minor)').eq('company_id',companyId).order('effective_from',{ascending:false}).order('id').range(first,last)),
+  allRows((first,last)=>client.from('employee_salary_assignments').select('employee_id,effective_from,id,employee_salary_component_values(component_code,amount_minor)').eq('company_id',companyId).eq('dataset_salary',true).order('effective_from',{ascending:false}).order('id').range(first,last)),
   allRows((first,last)=>client.from('employee_client_salary_references').select('employee_id,pf_minor,esi_minor,ctc_minor').eq('company_id',companyId).order('employee_id').range(first,last))
  ]);
  const people=new Map(personal.map(row=>[row.employee_id,row])),stats=new Map(statutory.map(row=>[row.employee_id,row])),accounts=new Map(banks.map(row=>[row.employee_id,row])),refs=new Map(references.map(row=>[row.employee_id,row])),names=new Map(employees.map(row=>[row.id,`${row.first_name} ${row.last_name}`.trim()]));

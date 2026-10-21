@@ -1,5 +1,16 @@
 # Implementation progress - 14 October 2026
 
+## 21 October 2026 - Employee dataset supplies salary amounts
+
+Supersedes the designation salary defaults below. Upload employee dataset with
+explicit Basic/DA/HRA/Other amounts, upload/finalize attendance, then calculate.
+No preset salary or automatic designation pay is used. Existing employee codes
+can be updated through an explicit reviewed import with version checks. Saved
+salary history and locked payroll are retained; only uploaded salary assignments
+are used for future calculations and previews. See docs/EMPLOYEE_DATASET_SALARIES.md.
+Apply supabase/upgrade-employee-dataset-salaries.sql once after 048 or the supplied
+049/050 rollback. Live application and signed-in visual acceptance remain pending.
+
 ## 21 October 2026 - Department-specific salary presets (048)
 
 Employee and attendance onboarding now link department to relevant roles. Twelve editable sample defaults span IT, Finance, Human Resources, Sales, Operations and Administration; the seven existing generic defaults remain General. The database assigns matched role salary components automatically, supplies missing known departments and rejects contradictory department/role input atomically. Other / Custom and existing salary revisions remain intact. Apply only supabase/upgrade-department-designations.sql after 047. Local tests verify Software Developer and Accountant onboarding and exact May payroll without manual salary assignment, mismatch rollback, original role/custom flows and protected-history preservation. Live application is pending; signed-in visual acceptance is unverified.

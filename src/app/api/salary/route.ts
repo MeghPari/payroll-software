@@ -7,7 +7,7 @@ export const GET=endpoint(async request=>{
  const params=new URL(request.url).searchParams;
  const employeeId=params.has('employeeId')?z.string().uuid().parse(params.get('employeeId')):null,rows=[];
  for(let offset=0;;offset+=500){
-  let query=client.from('employee_salary_assignments').select('id,employee_id,structure_id,effective_from,remarks,created_by,created_at,salary_structures(name),employee_salary_component_values(component_code,amount_minor)').eq('company_id',companyId).order('effective_from',{ascending:false}).order('id').range(offset,offset+499);
+  let query=client.from('employee_salary_assignments').select('id,employee_id,structure_id,effective_from,remarks,created_by,created_at,salary_structures(name),employee_salary_component_values(component_code,amount_minor)').eq('company_id',companyId).eq('dataset_salary',true).order('effective_from',{ascending:false}).order('id').range(offset,offset+499);
   if(employeeId)query=query.eq('employee_id',employeeId);
   const response=await query;databaseError(response.error);rows.push(...(response.data??[]));if((response.data?.length??0)<500)break;
  }
