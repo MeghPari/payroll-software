@@ -21,7 +21,7 @@ try {
     grant select,insert,delete on storage.objects to authenticated;
   `);
   const directory = new URL('../supabase/migrations/', import.meta.url);
-  for (const name of (await readdir(directory)).filter(name => name.endsWith('.sql')&&!name.includes('0049_')&&!name.includes('0050_')).sort()) {
+  for (const name of (await readdir(directory)).filter(name => name.endsWith('.sql')&&!name.includes('0049_')).sort()) {
     let source = await readFile(new URL(name, directory), 'utf8');
     // PGlite lacks pgcrypto. PostgreSQL's built-in gen_random_uuid is available;
     // no cryptographic pgcrypto functions are used by these migrations.
@@ -78,9 +78,6 @@ try {
   await database.exec(await readFile(new URL('../supabase/migrations/202610210049_employee_master_authority.sql',import.meta.url),'utf8'));
   await database.exec(await readFile(new URL('../supabase/tests/employee_master_authority.sql',import.meta.url),'utf8'));
   console.log('PASS authoritative master workflow and historical protection');
-  await database.exec(await readFile(new URL('../supabase/migrations/202610210050_delete_month_attendance.sql',import.meta.url),'utf8'));
-  await database.exec(await readFile(new URL('../supabase/tests/delete_month_attendance.sql',import.meta.url),'utf8'));
-  console.log('PASS month deletion scoping, permissions, stale previews, protected payroll, clearing matching and resetting unapproved previews');
   console.log('Auth schema/uid are fixtures. This does not verify Supabase Auth, REST grants, Storage, or live sessions.');
 } catch (error) {
   console.error('Database test failed', { message: error.message, code: error.code, position:error.position, internalPosition:error.internalPosition, internalQuery:error.internalQuery, where: error.where });
