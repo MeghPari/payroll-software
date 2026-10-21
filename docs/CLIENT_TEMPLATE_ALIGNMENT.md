@@ -59,3 +59,24 @@ A matching designation supplies approved preset amounts during employee creation
 Download Attendance Template serves the exact original XLSX, including its October 2026 headers, formatting and validations. For another month, change the date values in row 2 while retaining the layout. The optional monthly CSV keeps all 31 date positions, with unused slots blank and summary columns fixed. P/A are accepted case-insensitively in flat CSV, grid, API and database and saved canonically as Present/Absent. L defaults to paid leave; H to holiday including weekly offs.
 
 The original template has no joining-date/designation column. For new employees, use the upload screen's shared fields; for mixed designations import Employee Database first or split the attendance upload. Existing employees keep saved profiles and salaries. Bank/statutory setup remains optional for provisional calculation under 041; payment preparation retains its existing bank checks.
+
+## Department-specific designations (048)
+
+After 047, apply `supabase/upgrade-department-designations.sql` once. Employee and attendance onboarding offer department selection followed by relevant designations. Added sample monthly gross INR defaults:
+
+| Department | Designation | Gross |
+| --- | --- | ---: |
+| IT | Software Developer | 70,000 |
+| IT | IT Support Engineer | 40,000 |
+| Finance | Accountant | 50,000 |
+| Finance | Finance Manager | 90,000 |
+| Human Resources | HR Executive | 40,000 |
+| Human Resources | HR Manager | 75,000 |
+| Sales | Sales Executive | 35,000 |
+| Sales | Sales Manager | 80,000 |
+| Operations | Operations Executive | 32,000 |
+| Operations | Operations Supervisor | 55,000 |
+| Administration | Admin Executive | 30,000 |
+| Administration | Office Manager | 60,000 |
+
+The seven earlier generic roles remain under General. Other / Custom stays available under each department; existing imported/custom department labels are preserved. Known department-specific designations must match their department; blank departments are supplied from the role. Attendance Function values remain authoritative when present in the file, so choose a matching shared designation or import the employee directory first for mixed roles. Existing salaries and approved financial records are unchanged by migration. The payroll engine calculates from the stored designation assignment with attendance and configured deductions; it does not require manual salary entry per new employee. Rates remain editable in Salary Structures and are sample gross, not guaranteed net. Existing custom pay requires an explicit reviewed switch on the employee Salary tab. Editing a preset does not rewrite past salary revisions.

@@ -5,8 +5,8 @@ const money=z.number().int().nonnegative().max(9000000000000);
 export const GET=endpoint(async request=>{
  const namesOnly=new URL(request.url).searchParams.get('namesOnly')==='true';
  const{client,companyId}=await tenant(request,namesOnly?'employees.read':'salary.read');
- if(namesOnly){const response=await client.rpc('list_designation_salary_names',{c:companyId});databaseError(response.error);return result(response.data);}
- const response=await client.from('designation_salary_presets').select('id,designation_name,structure_id,amounts,active,version').eq('company_id',companyId).order('designation_name');databaseError(response.error);return result(response.data);
+ if(namesOnly){const response=await client.rpc('list_department_designations',{c:companyId});databaseError(response.error);return result(response.data);}
+ const response=await client.from('designation_salary_presets').select('id,designation_name,department,structure_id,amounts,active,version').eq('company_id',companyId).order('designation_name');databaseError(response.error);return result(response.data);
 });
 export const POST=endpoint(async request=>{
  const{client,companyId}=await tenant(request,'salary.write');

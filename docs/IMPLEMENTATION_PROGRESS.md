@@ -1,5 +1,9 @@
 # Implementation progress - 14 October 2026
 
+## 21 October 2026 - Department-specific salary presets (048)
+
+Employee and attendance onboarding now link department to relevant roles. Twelve editable sample defaults span IT, Finance, Human Resources, Sales, Operations and Administration; the seven existing generic defaults remain General. The database assigns matched role salary components automatically, supplies missing known departments and rejects contradictory department/role input atomically. Other / Custom and existing salary revisions remain intact. Apply only supabase/upgrade-department-designations.sql after 047. Local tests verify Software Developer and Accountant onboarding and exact May payroll without manual salary assignment, mismatch rollback, original role/custom flows and protected-history preservation. Live application is pending; signed-in visual acceptance is unverified.
+
 The core payroll and accounting workflows are implemented and tested locally. The full requested platform is not yet complete or verified for production.
 
 ## Existing Supabase project

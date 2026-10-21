@@ -8,7 +8,7 @@ select set_config('request.jwt.claim.sub','46000000-0000-4000-8000-000000000001'
 do $$declare c uuid:='46000000-0000-4000-8000-000000000011';e uuid;manual_employee uuid;hr_employee uuid;p jsonb;rate public.designation_salary_presets;v integer;s uuid;batch jsonb;r uuid;begin
  p:='{"employeeCode":"ROLE1","firstName":"Role","lastName":"Employee","email":"","joiningDate":"2026-07-01","designation":"Executive"}';
  e:=public.save_employee(c,p);
- if(select count(*)from public.designation_salary_presets where company_id=c)<>7 then raise exception 'FAIL seven presets';end if;
+ if(select count(*)from public.designation_salary_presets where company_id=c)<>19 then raise exception 'FAIL nineteen presets';end if;
  if(select sum(v.amount_minor)from public.employee_salary_assignments a join public.employee_salary_component_values v on v.assignment_id=a.id and v.company_id=c where a.employee_id=e and a.company_id=c)<>4200000 then raise exception 'FAIL automatic Executive gross';end if;
  if not exists(select 1 from public.employee_salary_assignments where company_id=c and employee_id=e and designation_preset_id is not null)then raise exception 'FAIL preset provenance';end if;
  manual_employee:=public.save_employee(c,p||'{"employeeCode":"CUSTOM1","designation":"Other"}');

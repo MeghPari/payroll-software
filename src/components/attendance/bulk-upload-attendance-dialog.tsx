@@ -1,5 +1,5 @@
 "use client";
-import {DesignationInput} from '@/components/employees/designation-input';
+import {DepartmentInput,DesignationInput} from '@/components/employees/designation-input';
 import {Input} from '@/components/ui/input';
 import {useState} from 'react';
 import {Button} from '@/components/ui/button';
@@ -53,7 +53,7 @@ interface BulkUploadAttendanceDialogProps {
 
 export function BulkUploadAttendanceDialog({ open, onOpenChange, onImported }: BulkUploadAttendanceDialogProps) {
   const [leave,setLeave]=useState<AttendanceCodePolicy['leave']>('Paid Leave'),[holiday,setHoliday]=useState<AttendanceCodePolicy['holiday']>('Holiday');
-  const [joiningDate,setJoiningDate]=useState(''),[designation,setDesignation]=useState('Other');
+  const [joiningDate,setJoiningDate]=useState(''),[designation,setDesignation]=useState('Other'),[department,setDepartment]=useState('');
   const month=useAppStore(state=>state.month),setMonth=useAppStore(state=>state.setMonth);
 
   return (
@@ -68,7 +68,7 @@ export function BulkUploadAttendanceDialog({ open, onOpenChange, onImported }: B
       templateColumns={['Employee Code','Employee Name','Counter Code','Counter Name','Location','State','Function','Daily attendance dates','Present','WFH','Half Day','Leave','Absent']}
       sampleRows={[]}
       parseRow={parseRow}
-      parseFile={async file=>{if(file.size>2000000)throw new Error('Import files must be under 2 MB.');const matrix=/\.xlsx$/i.test(file.name)?await readImportSheet(file):parseCSVMatrix(await file.text());if(matrix[0]?.[0]==='Employee Code'&&matrix[0]?.[1]==='Employee Name'&&matrix[0]?.[2]==='Counter Code')return clientAttendanceRows(matrix,monthKeyFromLabel(month),{leave,holiday}).map(row=>({...row,joiningDate:row.joiningDate||joiningDate,designation:row.designation||designation}));return(await readImportRecords(file)).map(parseRow).map(row=>({...row,joiningDate:row.joiningDate||joiningDate,designation:row.designation||designation}));}}
+      parseFile={async file=>{if(file.size>2000000)throw new Error('Import files must be under 2 MB.');const matrix=/\.xlsx$/i.test(file.name)?await readImportSheet(file):parseCSVMatrix(await file.text());if(matrix[0]?.[0]==='Employee Code'&&matrix[0]?.[1]==='Employee Name'&&matrix[0]?.[2]==='Counter Code')return clientAttendanceRows(matrix,monthKeyFromLabel(month),{leave,holiday}).map(row=>({...row,joiningDate:row.joiningDate||joiningDate,designation:row.designation||designation,department:row.department||department}));return(await readImportRecords(file)).map(parseRow).map(row=>({...row,joiningDate:row.joiningDate||joiningDate,designation:row.designation||designation,department:row.department||department}));}}
       validateRows={rows=>validateAttendanceImport(rows,monthKeyFromLabel(month))}
       previewColumns={previewColumns}
       onImport={async (rows) => {
@@ -80,7 +80,7 @@ export function BulkUploadAttendanceDialog({ open, onOpenChange, onImported }: B
         <div className="space-y-1.5">
           <p className="text-sm text-muted-foreground">Client monthly grids are supported. L means paid leave. H means paid holiday, including Sundays and weekly offs. Blank dates remain unrecorded.</p>
           <Button variant="outline" onClick={()=>{const template=clientAttendanceTemplate(monthKeyFromLabel(month));downloadCSV('Attendance_Template-'+monthKeyFromLabel(month)+'.csv',template.headers,template.rows);}}>Download client monthly grid</Button>
-          <Label>Designation for new employees (if absent from file)</Label><DesignationInput value={designation} onChange={setDesignation}/><Label htmlFor="new-employee-joining">Joining date for new employees (if absent from file)</Label><Input id="new-employee-joining" type="date" value={joiningDate} onChange={event=>setJoiningDate(event.target.value)}/><p className="text-xs text-muted-foreground">Unknown codes will create employees. Supply Employee Name and Joining Date in the file, or use this date for new employees only. Employee creation permission is required. Existing profiles are unchanged. For mixed new designations, import the Employee Database first or upload each designation separately.</p>
+          <Label>Department for new employees (if absent from file)</Label><DepartmentInput value={department} onChange={value=>{setDepartment(value);setDesignation('Other');}}/><Label>Designation for new employees (if absent from file)</Label><DesignationInput department={department} value={designation} onChange={setDesignation}/><Label htmlFor="new-employee-joining">Joining date for new employees (if absent from file)</Label><Input id="new-employee-joining" type="date" value={joiningDate} onChange={event=>setJoiningDate(event.target.value)}/><p className="text-xs text-muted-foreground">Unknown codes will create employees. Supply Employee Name and Joining Date in the file, or use this date for new employees only. Employee creation permission is required. Existing profiles are unchanged. For mixed new designations, import the Employee Database first or upload each designation separately.</p>
           <Label>Select Payroll Month</Label>
           <FilterSelect value={month} onChange={setMonth} options={payrollMonths} className="w-full bg-white" />
           <Label htmlFor="grid-leave">L code</Label><select id="grid-leave" className="h-10 w-full rounded-md border px-3" value={leave??''} onChange={event=>setLeave(event.target.value as AttendanceCodePolicy['leave'])}><option value="">Choose if used</option><option>Paid Leave</option><option>Unpaid Leave</option></select>

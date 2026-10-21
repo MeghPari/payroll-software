@@ -76,4 +76,7 @@ try{
  await database.exec(await readFile(new URL('../supabase/upgrade-designation-salaries.sql',import.meta.url),'utf8'));
  for(let index=0;index<financialTables.length;index++){const rows=(await database.query(`select to_jsonb(row) record from public.${financialTables[index]} row`)).rows;if(JSON.stringify(rows)!==JSON.stringify(financialBefore[index]))throw Error('Designation upgrade rewrote '+financialTables[index]);}
  console.log('PASS designation/attendance-alias upgrade preserves all protected financial fixtures.');
+ await database.exec(await readFile(new URL('../supabase/upgrade-department-designations.sql',import.meta.url),'utf8'));
+ for(let index=0;index<financialTables.length;index++){const rows=(await database.query(`select to_jsonb(row) record from public.${financialTables[index]} row`)).rows;if(JSON.stringify(rows)!==JSON.stringify(financialBefore[index]))throw Error('Department upgrade rewrote '+financialTables[index]);}
+ console.log('PASS department preset upgrade preserves protected financial history.');
 }catch(error){console.error('Upgrade test failed',{message:error.message,code:error.code});process.exitCode=1;}finally{await database.close();}

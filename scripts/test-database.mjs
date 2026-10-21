@@ -33,6 +33,8 @@ try {
   console.log('PASS tenant visibility, forbidden cross-company writes, employee creation, duplicate prevention, stale versions, forbidden audit forging/deletion, atomic audit');
   await database.exec(await readFile(new URL('../supabase/tests/hr_workflows.sql', import.meta.url), 'utf8'));
   console.log('PASS effective salary history, exact amounts, import rollback, attendance completeness/finalization/correction, leave balances/approval/overlap/overdraw invariants');
+  await database.exec(await readFile(new URL('../supabase/tests/department_designations.sql',import.meta.url),'utf8'));
+  console.log('PASS department role hierarchy, exact designation payroll, mismatch rollback and custom preservation');
   await database.exec(await readFile(new URL('../supabase/tests/designation_salaries.sql',import.meta.url),'utf8'));
   console.log('PASS designation defaults, automatic onboarding/role revisions, custom overrides, CSV precedence, HR permissions, private assignment denial, P/A storage and exact role payroll');
   await database.exec(await readFile(new URL('../supabase/tests/salary_all_months.sql',import.meta.url),'utf8'));
