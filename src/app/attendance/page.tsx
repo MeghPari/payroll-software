@@ -1,5 +1,6 @@
 "use client";
 import Link from 'next/link';
+import {DeleteMonthAttendance} from '@/components/attendance/delete-month-attendance';
 import { MonthlyAttendanceEditor } from '@/components/attendance/monthly-attendance-editor';
 import { dailyAttendanceRoster } from '@/domain/daily-attendance-roster';
 import { PayrollNavigation } from '@/components/payroll/payroll-navigation';
@@ -429,7 +430,7 @@ function AttendanceRegisterPeriod({employees,loading:employeesLoading,month,setM
       <SectionCard
         title="Monthly Attendance Register"
         subtitle={month}
-        actions={<div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" onClick={()=>setAllColumns(value=>!value)} aria-pressed={allColumns}>{allColumns?'Simple view':'All attendance columns'}</Button><Button variant="outline" disabled={finalized || !permitted('attendance.write')} onClick={()=>setMarkOpen(true)}>Mark multiple dates</Button><FilterSelect value={month} onChange={setMonth} options={payrollMonths} className="w-44 bg-white" /></div>}
+        actions={<div className="flex flex-wrap gap-2"><DeleteMonthAttendance key={monthKey} month={monthKey} label={month} onDeleted={refresh}/><Button variant="outline" size="sm" onClick={()=>setAllColumns(value=>!value)} aria-pressed={allColumns}>{allColumns?'Simple view':'All attendance columns'}</Button><Button variant="outline" disabled={finalized || !permitted('attendance.write')} onClick={()=>setMarkOpen(true)}>Mark multiple dates</Button><FilterSelect value={month} onChange={setMonth} options={payrollMonths} className="w-44 bg-white" /></div>}
         noPadding
       >
         <DataTable columns={allColumns?columns:columns.filter(column=>['employee','missing','review','present','payableDays','lopDays'].includes(column.id??''))} data={onlyMissing?data.filter(row=>row.reviewMissing>0):data} loading={loadingAll} pageSize={10} />
@@ -641,6 +642,7 @@ function UploadAttendanceTab({onImported,onReview}:{onImported:()=>void;onReview
           </Button>
         </div>
       </div>
+      <div className="flex justify-end"><DeleteMonthAttendance key={month} month={monthKeyFromLabel(month)} label={month} onDeleted={()=>{setSuccess(null);onImported();}}/></div>
       <BulkUploadAttendanceDialog open={open} onOpenChange={setOpen} onImported={count=>{setSuccess({month,count});onImported();}} />
     </SectionCard>
   );

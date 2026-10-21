@@ -20,7 +20,7 @@ try{
  await compile('src/domain/attendance-input.ts','attendance.mjs');await compile('src/domain/csv.ts','csv.mjs');await compile('src/domain/master-payroll-output.ts','output.mjs');
  await writeFile(new URL('auth.mjs',out),`
  import{ApiError}from './http.mjs';const{db,company,user}=globalThis.masterFixture;
- const signatures={has_permission:['c','permission_code'],import_employee_master:['c','rows_json','update_existing','expected_versions'],import_attendance:['c','rows_json','reason_text'],validate_payroll:['c','m'],calculate_payroll:['c','m'],payroll_master_reconciliation:['c','m'],reconcile_saved_master_attendance:['c','m','reason_text'],transition_payroll:['c','m','action_text','expected_version','reason_text']};
+ const signatures={attendance_month_delete_preview:['c','m'],delete_month_attendance:['c','m','expected_revision','expected_count','reason_text'],has_permission:['c','permission_code'],import_employee_master:['c','rows_json','update_existing','expected_versions'],import_attendance:['c','rows_json','reason_text'],validate_payroll:['c','m'],calculate_payroll:['c','m'],payroll_master_reconciliation:['c','m'],reconcile_saved_master_attendance:['c','m','reason_text'],transition_payroll:['c','m','action_text','expected_version','reason_text']};
  const client={async rpc(name,input){const keys=signatures[name];if(!keys)throw Error('Unexpected RPC '+name);try{return{data:(await db.query('select public.'+name+'('+keys.map((key,index)=>'$'+(index+1)).join(',')+') value',keys.map(key=>typeof input[key]==='object'?JSON.stringify(input[key]):input[key]))).rows[0].value,error:null};}catch(error){return{data:null,error:{code:error.code,message:error.message}}}},from(table){
  if(!['employee_master_revisions','payroll_runs','payroll_run_employees','payroll_calculation_methods'].includes(table))throw Error('Unexpected table '+table);
  const filters=[],args=[],orders=[];let columns='*',limit=250,offset=0,single=false;
@@ -28,7 +28,7 @@ try{
  export async function tenant(request,permission){if(request.headers.get('x-company-id')!==company)throw new ApiError(403,'NOT_A_MEMBER','Company denied.');const allowed=await db.query('select public.has_permission($1,$2)allowed',[company,permission]);if(!allowed.rows[0].allowed)throw new ApiError(403,'FORBIDDEN','Permission denied.');return{client,companyId:company,user:{id:user}};}
  `);
  const aliases={'@/server/auth':'./auth.mjs','@/server/http':'./http.mjs','@/server/paging':'./paging.mjs','@/domain/client-employee':'./employee.mjs','@/domain/attendance-input':'./attendance.mjs','@/domain/master-payroll-output':'./output.mjs','@/domain/csv':'./csv.mjs'};
- for(const[path,name]of [['src/app/api/employees/client-import/route.ts','master'],['src/app/api/attendance/imports/route.ts','imports'],['src/app/api/payroll/route.ts','payroll'],['src/app/api/payroll/master-output/route.ts','export'],['src/app/api/payroll/reconciliation/route.ts','matching'],['src/app/api/designation-salaries/route.ts','retired'],['src/app/api/payroll/illustration/route.ts','estimate']])await compile(path,name+'.mjs',aliases);
+ for(const[path,name]of [['src/app/api/employees/client-import/route.ts','master'],['src/app/api/attendance/imports/route.ts','imports'],['src/app/api/payroll/route.ts','payroll'],['src/app/api/payroll/master-output/route.ts','export'],['src/app/api/payroll/reconciliation/route.ts','matching'],['src/app/api/designation-salaries/route.ts','retired'],['src/app/api/payroll/illustration/route.ts','estimate'],['src/app/api/attendance/month/route.ts','delete-month']])await compile(path,name+'.mjs',aliases);
  const master=await import(new URL('master.mjs',out)),attendance=await import(new URL('imports.mjs',out)),payroll=await import(new URL('payroll.mjs',out)),output=await import(new URL('export.mjs',out)),matching=await import(new URL('matching.mjs',out)),retired=await import(new URL('retired.mjs',out));
  const request=(payload,query='',id=company)=>new Request('http://localhost:3000/api/test'+query,{method:payload?'POST':'GET',headers:{origin:'http://localhost:3000','content-type':'application/json','x-company-id':id},...(payload?{body:JSON.stringify(payload)}:{})});
  async function post(handler,payload,status){const response=await handler(request(payload)),json=await response.json();assert.equal(response.status,status,JSON.stringify(json));return json.data??json;}
@@ -55,6 +55,21 @@ try{
  await post(master.POST,{mode:'update',expectedVersions:{API1:version},rows:[{...p,salaryEffectiveFrom:'2026-06-01',amounts:{basic:1100000,da:200000,hra:300000,other:100000},salaryReference:{grossMinor:1700000,pfMinor:100000,esiMinor:12000,ctcMinor:1900000}}]},201);
  assert.equal(await(await output.GET(request(null,'?month=2026-05&export=csv'))).text(),csv);
  assert.equal((await output.GET(request(null,'?month=2026-05','59000000-0000-4000-8000-000000000099'))).status,403);await post(retired.POST,{action:'initialize'},410);const estimate=await import(new URL('estimate.mjs',out));assert.equal((await estimate.GET(request(null,'?month=2026-05'))).status,410);
+ const deletion=await import(new URL('delete-month.mjs',out));
+ const lockedPreview=await(await deletion.GET(request(null,'?month=2026-05'))).json();assert.match(lockedPreview.data.blockedReason,/approval/);
+ async function clear(payload,status,id=company){const req=new Request(request(payload,'',id),{method:'DELETE'});const response=await deletion.DELETE(req);const json=await response.json();assert.equal(response.status,status,JSON.stringify(json));return json;}
+ await clear({month:'2026-05',confirmedMonth:'2026-05',expectedRevision:lockedPreview.data.revision,expectedCount:62,reason:'Protected month'},409);
+ await post(attendance.POST,{reason:'June fixture',rows:[row(employees[0],'2026-06-01')]},201);
+ let deletionPreview=(await(await deletion.GET(request(null,'?month=2026-06'))).json()).data;
+ await clear({month:'2026-06',confirmedMonth:'2026-05',expectedRevision:deletionPreview.revision,expectedCount:1,reason:'Wrong month'},422);
+ await post(attendance.POST,{reason:'Concurrent June fixture',rows:[row(employees[0],'2026-06-02')]},201);
+ await clear({month:'2026-06',confirmedMonth:'2026-06',expectedRevision:deletionPreview.revision,expectedCount:1,reason:'Stale review'},409);
+ deletionPreview=(await(await deletion.GET(request(null,'?month=2026-06'))).json()).data;
+ const deletionPayload={month:'2026-06',confirmedMonth:'2026-06',expectedRevision:deletionPreview.revision,expectedCount:2,reason:'Replace incorrect attendance file'};
+ await clear(deletionPayload,403,'59000000-0000-4000-8000-000000000099');assert.equal((await clear(deletionPayload,200)).data.deleted,2);
+ assert.equal((await db.query('select count(*)::integer n from public.attendance_records where company_id=$1 and date between $2 and $3',[company,'2026-06-01','2026-06-30'])).rows[0].n,0);
+ assert.equal(await(await output.GET(request(null,'?month=2026-05&export=csv'))).text(),csv);
+ console.log('PASS actual month deletion handler: typed month, stale review, tenant denial, protected locked payroll, exact deletion and preserved other-month exports.');
  console.log('PASS actual handlers: master import/update, canonical code identity, different salaries/same names, unknown attendance rejection, duplicates, reconciliation, incomplete-payroll denial, calculation/approval/locking and snapshot CSV equality after a later salary revision.');
  console.log('Auth and REST transports are fixtures. No live client records were changed.');
 }catch(error){console.error('Master API workflow failed',{message:error.message,code:error.code,where:error.where});process.exitCode=1;}finally{await db.close();delete globalThis.masterFixture;}

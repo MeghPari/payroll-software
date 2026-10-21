@@ -1,5 +1,9 @@
 # Implementation progress - 14 October 2026
 
+## 21 October 2026 - Delete attendance by month (050)
+
+Attendance Monthly review and Upload Attendance now expose a reviewed month-clearing action to Super Admin/HR Admin. It requires the exact selected YYYY-MM and a reason, checks the current company input revision/count under the company lock, and removes only that month/company's attendance and matching records. Unapproved salary previews reset to Draft; finalized attendance requires reopening first. Approval/payslip/accounting/disbursement history blocks deletion even after a payroll unlock. Audit and import history, employee salary/master data and other months are retained. Local SQL and actual API tests verify tenant/role denial, stale reviews, month confirmation, boundaries, preview reset and protected payroll/other-month exports. Apply supabase/upgrade-delete-month-attendance.sql once after 049; applying the migration itself deletes nothing. No live deletion performed.
+
 ## 21 October 2026 - Authoritative Employee Database architecture (049)
 
 Supersedes the preset workflows below. New payroll now requires employee-specific salary components imported from the original 30-column Employee Database, plus reconciled attendance. Preset assignment, CTC percentage splitting, independent salary-editing UI and unused demo generators are retired. Versioned updates match normalized Employee Code, preserve uploaded salary references without reclassifying PF/ESI, append salary revisions and retain historical snapshots. Unknown attendance employees are rejected. New matching and contractual-versus-earned views/CSV use the existing exact payroll engine. Apply supabase/upgrade-employee-master.sql once after 048; tools have not applied it to the live project. See [workflow, mapping, rules and verification](EMPLOYEE_DATABASE_WORKFLOW.md). Earlier entries record historical implementations, not the current salary-source policy.

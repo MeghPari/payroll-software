@@ -82,4 +82,7 @@ try{
  await database.exec(await readFile(new URL('../supabase/upgrade-employee-master.sql',import.meta.url),'utf8'));
  for(let index=0;index<financialTables.length;index++){const rows=(await database.query(`select to_jsonb(row) record from public.${financialTables[index]} row`)).rows;if(JSON.stringify(rows)!==JSON.stringify(financialBefore[index]))throw Error('Master authority upgrade rewrote '+financialTables[index]);}
  console.log('PASS authoritative Employee Database upgrade preserves locked payroll, published payslips and posted/paid financial records.');
+ await database.exec(await readFile(new URL('../supabase/upgrade-delete-month-attendance.sql',import.meta.url),'utf8'));
+ for(let index=0;index<financialTables.length;index++){const rows=(await database.query(`select to_jsonb(row) record from public.${financialTables[index]} row`)).rows;if(JSON.stringify(rows)!==JSON.stringify(financialBefore[index]))throw Error('Attendance deletion feature migration rewrote '+financialTables[index]);}
+ console.log('PASS month deletion upgrade adds capability without deleting records or changing protected financial history.');
 }catch(error){console.error('Upgrade test failed',{message:error.message,code:error.code});process.exitCode=1;}finally{await database.close();}

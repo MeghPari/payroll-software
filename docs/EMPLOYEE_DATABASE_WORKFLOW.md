@@ -56,6 +56,12 @@ Run **supabase/upgrade-employee-master.sql once after 048**. Do not rerun setup,
 
 The new normalized-code index rejects companies with pre-existing codes differing only by case/outer spaces. Resolve such identifiers deliberately before applying the upgrade; the migration does not choose an employee or rename codes silently.
 
+## Delete a month's attendance (050)
+
+After 049, run `supabase/upgrade-delete-month-attendance.sql` once. Applying it does not delete records. Super Admin and HR Admin receive `attendance.delete`. Refresh the session/page to load the permission. In Attendance → Monthly review or Upload Attendance, select the month and choose **Delete month's attendance**. The dialog shows the actual record count, requires typing YYYY-MM and a reason, and rejects a stale review if attendance/payroll inputs change before confirmation.
+
+Finalized attendance must first be reopened through the existing authorized workflow. Deletion is blocked for payroll with approval history, payslips, accounting postings or disbursement batches, including protected payroll that was subsequently unlocked. An open month's attendance records and matching markers are removed atomically; any unapproved salary preview is cleared and its run reset to Draft. Employee master/salary data, other months, leave requests, import batches and audit history remain. Re-import or record the month's actual attendance, reconcile/finalize and recalculate. The app does not provide undo. No live records are deleted by development tools.
+
 ## Verification
 
 - Existing database tests run through 048 as historical regression coverage, then migration 049 and the new authoritative-workflow tests run on the same engine.
