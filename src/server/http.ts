@@ -10,6 +10,7 @@ export function databaseError(error: { code?: string; message: string } | null) 
   if(error.code===''||['PGRST000','PGRST001','PGRST002','PGRST003'].includes(error.code??''))throw new ApiError(503,'DATABASE_UNAVAILABLE','The database request could not be confirmed. Refresh the records before retrying.');
   if (['PGRST202','PGRST204','PGRST205','42703','42P01','42883'].includes(error.code ?? '')) throw new ApiError(503,'MIGRATION_REQUIRED','The database needs the latest application migration. Contact your administrator.');
   if (error.code === '42501') throw new ApiError(403, 'FORBIDDEN', 'Permission denied.');
+  if(error.code==='P0049')throw new ApiError(422,'EMPLOYEE_MASTER_REQUIRED',error.message);
   if (error.code === 'P0048') throw new ApiError(422, 'DEPARTMENT_MISMATCH', 'The selected designation belongs to a different department. Choose its department or Other / Custom.');
   if (error.code === 'P0002') throw new ApiError(404, 'NOT_FOUND', 'Record not found.');
   if (['23505', '40001', '55P03'].includes(error.code ?? '')) throw new ApiError(409, 'CONFLICT', 'Duplicate record or concurrent change. Refresh and retry.');

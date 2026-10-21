@@ -17,7 +17,7 @@ import { toast } from "sonner";
 const faqs = [
   { q: "How do I run payroll for the current month?", a: "Go to Payroll Run, select the month, validate employee data, then follow the guided steps through calculation, review and approval." },
   { q: "How can I publish payslips to employees?", a: "From the Payslips page, use the Publish Payslips quick action to make payslips visible to employees in their authorized account." },
-  { q: "How do I add a new salary structure?", a: "Navigate to Salary Structures and click Create Structure. Define earnings and deduction components, then save and assign it to employees." },
+  { q: "How do I import employee salary structures?", a: "Upload Employee Database with each employee's actual salary components. Review the preview and import; designation does not assign salary." },
   { q: "Where can I download financial reports?", a: "Visit Financial Reports to generate and download Trial Balance, P&L, Balance Sheet and ledger-based reports." },
 ];
 

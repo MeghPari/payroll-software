@@ -35,19 +35,13 @@ export async function getUploadHistory():Promise<UploadHistoryRecord[]>{return t
 export const ATTENDANCE_IMPORT_COLUMNS=['Employee ID','Date','Shift','Check-In','Check-Out','Work Hours','Attendance Status','Leave Type','Overtime','Remarks']as const;
 export interface AttendanceImportRow{employeeId:string;employeeName?:string;joiningDate?:string;designation?:string;counterCode?:string;counterName?:string;location?:string;state?:string;department?:string;date:string;shift:string;checkIn:string;checkOut:string;workHours:string;status:string;leaveType:string;overtime:string;remarks:string}
 const statuses=['Present','Absent','Paid Leave','Unpaid Leave','Half Day','Weekly Off','Holiday','Work From Home','Missing Punch'];
-export function attendanceEmployeeDraft(row:AttendanceImportRow){
- const name=(row.employeeName??'').trim().replace(/\s+/g,' '),joiningDate=normalizeAttendanceImportDate(row.joiningDate??'');
- if(!/^[A-Za-z0-9_-]{1,40}$/.test(row.employeeId))throw new Error('New employees need an Employee Code of up to 40 letters, numbers, underscores or hyphens.');
- if(!name||name.split(' ')[0].length>100||name.split(' ').slice(1).join(' ').length>100)throw new Error('Supply Employee Name for the new employee.');
- if(!joiningDate)throw new Error('Supply the new employee joining date in the file or upload settings.');
- return{employeeCode:row.employeeId,employeeName:name,joiningDate,designation:row.designation??'Other',counterCode:row.counterCode??'',counterName:row.counterName??'',workLocation:row.location??'',state:row.state??'',department:row.department??''};
-}
 export async function validateAttendanceImport(rows:AttendanceImportRow[],month:string):Promise<ImportRowResult<AttendanceImportRow>[]> {
- const[employees,existing,finalized]=await Promise.all([getEmployees(),records('month='+monthKey(month)),isAttendanceFinalized(month)]),seen=new Set(existing.map(r=>r.employeeId+'/'+r.date)),drafts=new Map<string,string>();
+ const[employees,existing,finalized]=await Promise.all([getEmployees(),records('month='+monthKey(month)),isAttendanceFinalized(month)]),seen=new Set(existing.map(r=>r.employeeId+'/'+r.date));
  return rows.map((input,index)=>{
-  const normalized=normalizeAttendanceImportDate(input.date),data={...input,status:normalizeAttendanceStatus(input.status),date:normalized??input.date},issues:string[]=[],employee=employees.find(e=>e.employeeCode===data.employeeId||e.id===data.employeeId);
-  if(!employee){try{const draft=attendanceEmployeeDraft(data),signature=JSON.stringify(draft),previous=drafts.get(data.employeeId);if(previous&&previous!==signature)issues.push('Conflicting name, joining date or details for this new employee.');drafts.set(data.employeeId,signature);if(normalized&&draft.joiningDate>normalized)issues.push('Attendance precedes the new employee joining date.');}catch(error){issues.push(error instanceof Error?error.message:'Invalid new employee details.');}}
-  if(employee&&input.employeeName&&input.employeeName.trim().replace(/\s+/g,' ').toLowerCase()!==employee.fullName.trim().replace(/\s+/g,' ').toLowerCase())issues.push('Employee name does not match the employee code in this company.');
+  const normalized=normalizeAttendanceImportDate(input.date),data={...input,employeeId:input.employeeId.trim().toUpperCase(),status:normalizeAttendanceStatus(input.status),date:normalized??input.date},issues:string[]=[],employee=employees.find(e=>e.employeeCode.trim().toUpperCase()===data.employeeId);
+  if(!data.employeeId)issues.push('Employee Code is required.');
+  else if(!employee)issues.push('Unknown Employee Code. Import this employee through Employee Database first.');
+  else if(!employee.masterImported)issues.push('Employee Database import is required for this employee before attendance.');
   if(finalized)issues.push('This month is finalized. Reopen it through attendance review before importing.');
   if(employee&&normalized&&normalized<employee.joiningDate)issues.push(employee.employeeCode+': '+normalized+' is before joining date '+employee.joiningDate+'.');
   if(employee&&normalized&&employee.exitDate&&normalized>employee.exitDate)issues.push(employee.employeeCode+': '+normalized+' is after leaving date '+employee.exitDate+'.');
@@ -57,12 +51,12 @@ export async function validateAttendanceImport(rows:AttendanceImportRow[],month:
   if(!parsed.success)for(const issue of parsed.error.issues)issues.push(String(issue.path[0])+': '+issue.message);
   const key=(employee?.id??data.employeeId)+'/'+data.date;if(seen.has(key))issues.push('Attendance already exists or is duplicated in this file.');seen.add(key);
   for(const amount of [data.workHours||'0',data.overtime||'0'])if(!Number.isFinite(Number(amount))||Number(amount)<0||Number(amount)>24)issues.push('Hours must be from 0 to 24.');
-  return{row:index+1,data:{...data,employeeName:employee?.fullName??data.employeeName},status:issues.length?'Error':employee?'Valid':'Warning',issues:issues.length?issues:employee?[]:['New employee will be created with joining date '+normalizeAttendanceImportDate(data.joiningDate??'')+'. Salary and bank details can be added later.']};
+  return{row:index+1,data:{...data,employeeName:employee?.fullName??data.employeeName},status:issues.length?'Error':'Valid',issues};
  });
 }
 export async function bulkImportAttendance(rows:AttendanceImportRow[],month:string):Promise<UploadRecord>{
  const validated=await validateAttendanceImport(rows,month);const rejected=validated.find(row=>row.status==='Error'||row.status==='Duplicate');if(rejected)throw new Error('Row '+rejected.row+': '+rejected.issues.join(' '));
- const newCodes=new Set(validated.filter(row=>row.status==='Warning').map(row=>row.data.employeeId));rows=validated.map(row=>row.data);const employees=await getEmployees(),newEmployees=new Map<string,ReturnType<typeof attendanceEmployeeDraft>>();
- const inputs=rows.map(row=>{const employee=newCodes.has(row.employeeId)?undefined:employees.find(e=>e.id===row.employeeId||e.employeeCode===row.employeeId);if(!employee)newEmployees.set(row.employeeId,attendanceEmployeeDraft(row));return payload({id:'',employeeId:employee?.id??row.employeeId,date:row.date,shift:row.shift,checkIn:row.checkIn,checkOut:row.checkOut,workHours:Number(row.workHours)||0,status:row.status as AttendanceStatus,leaveType:row.leaveType,overtime:Number(row.overtime)||0,remarks:row.remarks,source:'CSV'});});
- return tenantApi('attendance/imports',{method:'POST',body:JSON.stringify({reason:'Reviewed spreadsheet attendance import',rows:inputs,...(newEmployees.size?{newEmployees:[...newEmployees.values()]}:{})})});
+ rows=validated.map(row=>row.data);const employees=await getEmployees();
+ const inputs=rows.map(row=>{const employee=employees.find(e=>e.employeeCode.trim().toUpperCase()===row.employeeId.trim().toUpperCase());if(!employee?.masterImported)throw new Error('Import Employee Database before attendance.');return payload({id:'',employeeId:employee.id,date:row.date,shift:row.shift,checkIn:row.checkIn,checkOut:row.checkOut,workHours:Number(row.workHours)||0,status:row.status as AttendanceStatus,leaveType:row.leaveType,overtime:Number(row.overtime)||0,remarks:row.remarks,source:'CSV'});});
+ return tenantApi('attendance/imports',{method:'POST',body:JSON.stringify({reason:'Reviewed spreadsheet attendance import',rows:inputs})});
 }

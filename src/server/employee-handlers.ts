@@ -19,7 +19,7 @@ export const employeeInput = z.object({
   bankDetails: z.object({ accountHolderName: z.string().max(160), accountNumber: z.string().regex(/^([0-9]{6,34})?$/), ifscCode: z.string().regex(/^([A-Z]{4}0[A-Z0-9]{6})?$/), bankName: z.string().max(160), branch: z.string().max(160) }).strict().optional(),
   statutory: z.object({ aadhaar:z.string().regex(/^([0-9]{12})?$/).optional(),pan: z.string().regex(/^([A-Z]{5}[0-9]{4}[A-Z])?$/).optional(), uan: z.string().regex(/^([0-9]{12})?$/).optional(), esicNumber: z.string().max(30).optional() }).strict().optional(),
 }).strict();
-const selection = 'counter_code,counter_name,client_status,id,employee_code,first_name,last_name,email,phone,department_id,designation_id,status,joining_date,exit_date,work_location,state,category,employment_type,version,departments(name),designations(name)';
+const selection = 'master_imported,counter_code,counter_name,client_status,id,employee_code,first_name,last_name,email,phone,department_id,designation_id,status,joining_date,exit_date,work_location,state,category,employment_type,version,departments(name),designations(name)';
 export const listEmployees = endpoint(async request => {
   // Employee/manager row visibility is enforced by can_read_employee RLS.
   const { client, companyId } = await tenant(request);

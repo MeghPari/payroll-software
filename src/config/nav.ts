@@ -54,7 +54,7 @@ export const navGroups: NavGroup[] = [
     label: "Employees & reports",
     items: [
       { label: "Employees", href: "/employees", icon: Users },
-      { label: "Salary Structures", href: "/salary-structures", icon: Layers },
+      { label: "Uploaded Salary Data", href: "/salary-structures", icon: Layers },
       { label: "Payslips", href: "/payslips", icon: FileText },
       { label: "Compliance", href: "/compliance", icon: ShieldCheck },
       { label: "Payroll Reports", href: "/payroll-reports", icon: BarChart3 },

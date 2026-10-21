@@ -1,5 +1,7 @@
 "use client";
 import Link from 'next/link';
+import {MasterPayrollOutput} from '@/components/payroll/master-payroll-output';
+import {MasterReconciliation} from '@/components/payroll/master-reconciliation';
 import dynamic from 'next/dynamic';
 import { PayrollBlockers } from '@/components/payroll/payroll-blockers';
 import { PayrollSetupNotice } from '@/components/payroll/payroll-setup-notice';
@@ -58,7 +60,6 @@ import type { Employee, PayrollCalculation, PayrollExceptionType, PayrollPeriod,
 import { toast } from "sonner";
 
 const ClientSalarySheet=dynamic(()=>import('@/components/payroll/client-salary-sheet').then(module=>module.ClientSalarySheet),{loading:()=> <p role="status">Loading client salary sheet...</p>});
-const PayrollIllustration=dynamic(()=>import('@/components/payroll/payroll-illustration').then(module=>module.PayrollIllustration),{loading:()=> <p role="status" className="p-4 text-sm text-muted-foreground">Loading...</p>});
 const PriorPayrollCorrections=dynamic(()=>import('@/components/payroll/prior-payroll-corrections').then(module=>module.PriorPayrollCorrections),{loading:()=> <p role="status" className="p-4 text-sm text-muted-foreground">Loading...</p>});
 const AdjustmentsPanel=dynamic(()=>import('@/components/payroll/adjustments-panel').then(module=>module.AdjustmentsPanel),{loading:()=> <p role="status" className="p-4 text-sm text-muted-foreground">Loading...</p>});
 const SalaryCalculationDrawer=dynamic(()=>import('@/components/shared/salary-calculation-drawer').then(module=>module.SalaryCalculationDrawer),{loading:()=> <p role="status" className="p-4 text-sm text-muted-foreground">Loading...</p>});
@@ -85,7 +86,7 @@ function PayrollRunPagePeriodContent({month,onMonthChange}:{month:string;onMonth
   const [finalized, setFinalized] = useState(false);
   const [eligibility, setEligibility] = useState<Record<string, number>>({});
   const [exceptions, setExceptions] = useState<Record<PayrollExceptionType, number>>({} as Record<PayrollExceptionType, number>);
-  const [illustration,setIllustration]=useState(false),[clientSheet,setClientSheet]=useState(false);
+  const [clientSheet,setClientSheet]=useState(false);
   const [validation, setValidation] = useState<PayrollValidationSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -237,7 +238,7 @@ function PayrollRunPagePeriodContent({month,onMonthChange}:{month:string;onMonth
         actions={
           <>
             <FilterSelect value={month} onChange={setMonth} options={payrollMonths} className="w-40 bg-white" />
-            <Button variant="outline" className="gap-1.5" disabled={illustration||rows.length === 0} onClick={()=>downloadCSV(`payroll-${monthKey}.csv`,["Employee ID","Gross earnings","Deductions","Net payable"],rows.map(row=>[row.employeeId,row.adjustedGross,row.totalDeductions,row.netPayable]))}>
+            <Button variant="outline" className="gap-1.5" disabled={rows.length === 0} onClick={()=>downloadCSV(`payroll-${monthKey}.csv`,["Employee ID","Gross earnings","Deductions","Net payable"],rows.map(row=>[row.employeeId,row.adjustedGross,row.totalDeductions,row.netPayable]))}>
               <Download className="h-4 w-4" /> Download Preview
             </Button>
             <Button variant="outline" className="gap-1.5" disabled title="Email delivery is awaiting integration">
@@ -246,6 +247,9 @@ function PayrollRunPagePeriodContent({month,onMonthChange}:{month:string;onMonth
           </>
         }
       />
+
+      <MasterReconciliation month={monthKey}/>
+      <MasterPayrollOutput key={monthKey+'/'+String(period?.version)+'/'+rows.length} month={monthKey}/>
 
       {isLocked && (
         <div className="mb-5 flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 px-4 py-3">
@@ -264,15 +268,12 @@ function PayrollRunPagePeriodContent({month,onMonthChange}:{month:string;onMonth
         </div>
       )}
 
-      <div className="mb-4"><Button variant="outline" disabled={!permitted('payroll.run')} onClick={()=>setIllustration(value=>!value)} aria-expanded={illustration}>{illustration?'Close earnings estimate':'Estimate base earnings'}</Button></div>
-      {illustration&&<PayrollIllustration key={companyId+monthKey} month={month}/>}
-      {!illustration&&<>
       {permitted('employees.sensitive')&&permitted('salary.read')&&<div className="mb-4"><Button variant="outline" onClick={()=>setClientSheet(value=>!value)} aria-expanded={clientSheet}>{clientSheet?'Hide client salary sheet':'Client salary sheet'}</Button></div>}
       {clientSheet&&<ClientSalarySheet key={monthKey+period?.version} month={monthKey}/>}
       <PayrollSetupNotice warnings={rows.flatMap(row=>row.setupWarnings??[])} showEmployeeLinks/>
       {rows.length>0&&<PayrollComparison month={monthKey} rows={rows} employees={employees}/>}
       {validation&&<PayrollBlockers issues={validation.issues} employees={employees} onReviewOvertime={()=>{setShowAdjustments(true);requestAnimationFrame(()=>document.getElementById('payroll-adjustments')?.scrollIntoView({behavior:'smooth'}));}}/>}
-      <section className="mb-5 rounded-xl border border-blue-200 bg-blue-50 p-5"><h2 className="font-semibold">{!finalized?'Start with attendance':validation?.blockingErrors?'Complete payroll setup before calculating.':!period?.validated?'Attendance ready. Calculate salaries next.':!period?.approved?'Review the salaries below, then approve.':!isLocked?'Approved. Lock payroll to prepare payment.':'Salaries locked and ready for payment.'}</h2><div className="mt-3 flex flex-wrap gap-2">{!finalized?<Link className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white" href="/attendance">Review monthly attendance</Link>:!period?.approved?<Button disabled={loading||!!busy||!permitted('payroll.run')} onClick={handleCalculate}>{busy==='calculate'?'Calculating...':period?.validated?'Recalculate salaries':'Calculate salaries'}</Button>:!isLocked?<Button disabled={!!busy||!permitted('payroll.lock')} onClick={()=>setLockConfirm(true)}>Lock approved payroll</Button>:permitted('disbursements.write')?<Link href="/disbursement" className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white">Continue to salary payments</Link>:<p className="text-sm">Your finance administrator can prepare salary payments.</p>}</div></section>
+      <section className="mb-5 rounded-xl border border-blue-200 bg-blue-50 p-5"><h2 className="font-semibold">{!finalized?'Import Employee Database, then review attendance':validation?.blockingErrors?'Complete payroll setup before calculating.':!period?.validated?'Review employee matching, then calculate payroll preview.':!period?.approved?'Review the salaries below, then approve.':!isLocked?'Approved. Lock payroll to prepare payment.':'Salaries locked and ready for payment.'}</h2><div className="mt-3 flex flex-wrap gap-2">{!finalized?<Link className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white" href="/attendance">Review monthly attendance</Link>:!period?.approved?<Button disabled={loading||!!busy||!permitted('payroll.run')} onClick={handleCalculate}>{busy==='calculate'?'Calculating...':period?.validated?'Recalculate salaries':'Calculate salaries'}</Button>:!isLocked?<Button disabled={!!busy||!permitted('payroll.lock')} onClick={()=>setLockConfirm(true)}>Lock approved payroll</Button>:permitted('disbursements.write')?<Link href="/disbursement" className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white">Continue to salary payments</Link>:<p className="text-sm">Your finance administrator can prepare salary payments.</p>}</div></section>
       <SectionCard className="mb-5">
         {loading ? <div className="h-24 animate-pulse rounded-lg bg-muted" /> : <PayrollStepper steps={buildSteps(period)} />}
       </SectionCard>
@@ -438,7 +439,6 @@ function PayrollRunPagePeriodContent({month,onMonthChange}:{month:string;onMonth
 
       <section id="payroll-adjustments" className="mt-5 rounded-xl border bg-card p-4"><Button variant="outline" onClick={()=>setShowAdjustments(value=>!value)} aria-expanded={showAdjustments}>{showAdjustments?'Hide':'Show'} overtime, bonuses & prior-month corrections</Button>{showAdjustments&&<div className="mt-4"><PriorPayrollCorrections key={"correction/"+companyId+monthKey} month={monthKey} employees={employees} protectedRun={!!period?.approved||period?.status==='Locked'} onSaved={refresh}/><AdjustmentsPanel key={companyId+monthKey} month={monthKey} employees={employees} protectedRun={!!period?.approved||period?.status==='Locked'} onSaved={refresh}/></div>}</section>
       {drawerEmployee&&<SalaryCalculationDrawer savedCalculation={rows.find(row=>row.employeeId===drawerEmployee?.id)} employee={drawerEmployee} month={monthKey} open={!!drawerEmployee} onOpenChange={(o) => !o && setDrawerEmployee(null)} />}
-      </>}
     </div>
   );
 }

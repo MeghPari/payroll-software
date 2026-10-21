@@ -3,7 +3,7 @@ import { employeeSetupWarnings } from '@/domain/payroll-setup';
 import { companyToday } from '@/domain/dates';
 import { componentCodes } from './salary-structure.service';
 import type { PayrollCalculation,PayrollEligibility,PayrollException,PayrollExceptionType,PayrollPeriod,PayrollRun,PayrollStepStatus,SalaryProfile } from '@/types';
-export {getSalaryStructures,getSalaryStructureById,updateSalaryStructure,createSalaryStructure}from './salary-structure.service';
+export {getSalaryStructures,getSalaryStructureById}from './salary-structure.service';
 export type PayrollValidationSummary=PayrollChecks & {issues:import('@/types').PayrollValidationIssue[]};
 function calculation(row:PayrollSnapshot,month:string):PayrollCalculation{
  const snapshot=row.snapshot,earn=snapshot.earnings,ded=snapshot.deductions,cost=snapshot.employer;

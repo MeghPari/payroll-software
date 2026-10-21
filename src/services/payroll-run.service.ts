@@ -3,7 +3,7 @@ import { monthKey } from '@/domain/dates';
 import type { AttendanceSummary } from '@/types';
 export interface PayrollSnapshot {
  employee_id:string;gross_minor:number;deduction_minor:number;net_minor:number;employer_minor:number;
- snapshot:{setupWarnings?:unknown;employeeCode:string;employeeName:string;calendarDays:number;proration?:string;prorationDays?:number;paidDays:number;earnings:Record<string,number>;deductions:Record<string,number>;employer:Record<string,number>;ruleVersions:Record<string,string>;baselineGrossMinor:number;salary:{effectiveFrom:string;structure:string;amounts:Record<string,number>};attendance:AttendanceSummary};
+ snapshot:{employeeMaster?:{masterRevisionId:string;identity:{designation:string;location:string;state:string};contractual:{basic:number;da:number;hra:number;other:number;references:{grossMinor:number;pfMinor:number;esiMinor:number;ctcMinor:number}};contracts:unknown[]};setupWarnings?:unknown;employeeCode:string;employeeName:string;calendarDays:number;proration?:string;prorationDays?:number;paidDays:number;earnings:Record<string,number>;deductions:Record<string,number>;employer:Record<string,number>;ruleVersions:Record<string,string>;baselineGrossMinor:number;salary:{effectiveFrom:string;structure:string;amounts:Record<string,number>};attendance:AttendanceSummary};
 }
 export interface PayrollRunData {
  workflow?:{published:boolean;disbursed:boolean;posted:boolean}|null;
