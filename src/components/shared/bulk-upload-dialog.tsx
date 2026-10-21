@@ -46,7 +46,6 @@ interface BulkUploadDialogProps<TRow> {
   onImport: (rows: TRow[]) => Promise<UploadRecord>;
   /** Optional extra control rendered above the dropzone, e.g. a payroll-month selector for attendance uploads. */
   extraField?: ReactNode;
-  validationSummary?:ReactNode;
 }
 
 export function BulkUploadDialog<TRow>({
@@ -64,7 +63,6 @@ export function BulkUploadDialog<TRow>({
   previewColumns,
   onImport,
   extraField,
-  validationSummary,
 }: BulkUploadDialogProps<TRow>) {
   const [step, setStep] = useState<Step>("template");
   const [file, setFile] = useState<File | null>(null);
@@ -234,7 +232,6 @@ export function BulkUploadDialog<TRow>({
                 onChange={(e) => {
                   const selected = e.target.files?.[0];
                   if (selected) handleFile(selected);
-                  e.target.value="";
                 }}
               />
             </div>
@@ -260,8 +257,6 @@ export function BulkUploadDialog<TRow>({
               </div>
             ) : (
               <>
-                {validationSummary}
-                <Button variant="outline" onClick={()=>downloadCSV('import-validation.csv',['Row','Employee Code','Status','Issues'],results.map(result=>{const row=result.data as {employeeId?:string;record?:Record<string,string>};return[result.row,row.employeeId??row.record?.['Employee Code']??'',result.status,result.issues.join(' ')];}))}>Download validation report</Button>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                   <MiniStat label="Rows Detected" value={results.length} tone="neutral" />
                   <MiniStat label="Valid" value={valid} tone="success" />

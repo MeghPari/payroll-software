@@ -14,8 +14,6 @@ try {
  const migrations=new URL('../supabase/migrations/',import.meta.url);
  for(const name of(await readdir(migrations)).filter(name=>name.endsWith('.sql')).sort())await database.exec((await readFile(new URL(name,migrations),'utf8')).replace('create extension if not exists pgcrypto;',''));
  await database.exec(`insert into auth.users values('${user}','attendance-api@example.invalid',now());insert into public.user_profiles(id)values('${user}');insert into public.companies(id,name)values('${company}','API fixture');insert into public.user_company_roles(company_id,user_id,role)values('${company}','${user}','Super Admin');insert into public.employees(id,company_id,employee_code,first_name,last_name,email,joining_date)values('${employee}','${company}','FIXTURE','API','Employee','employee@example.invalid','2026-09-03');set role authenticated;select set_config('request.jwt.claim.sub','${user}',false);`);
- const master={employeeCode:'FIXTURE',employeeName:'API Employee',gender:'',dateOfBirth:'',maritalStatus:'',phone:'',aadhaar:'',pan:'',uan:'',esicNumber:'',joiningDate:'2026-09-03',exitDate:'',clientStatus:'Active',counterCode:'',counterName:'',reportingManager:'',workLocation:'',state:'',department:'',designation:'',accountNumber:'',ifscCode:'',amounts:{basic:0,da:0,hra:0,other:0},salaryEffectiveFrom:'2026-09-03',salaryReference:{grossMinor:0,pfMinor:0,esiMinor:0,ctcMinor:0}};
- await database.query('select public.import_employee_master($1,$2::jsonb,true,$3::jsonb)',[company,JSON.stringify([master]),JSON.stringify({FIXTURE:1})]);
  async function compile(path,name,replacements={}){
   let source=(await readFile(new URL(`../${path}`,import.meta.url),'utf8')).replace("import 'server-only';",'');
   for(const[from,to]of Object.entries(replacements))source=source.replaceAll(from,to);
@@ -65,14 +63,18 @@ try {
  const invalidEmployment=await check(imports.POST,{reason:'Pre-joining fixture',rows:[{...row,date:'2026-07-01'}]},422,'EMPLOYMENT_DATE_INVALID');assert.match(invalidEmployment.error.message,/FIXTURE: 2026-07-01 is before joining date 2026-09-03/);
  await check(imports.POST,{reason:'Bad time fixture',rows:[{...row,checkIn:'29:00'}]},422,'VALIDATION_ERROR');
  const newPerson={employeeCode:'OUTSIDE_API',employeeName:'Outside Person',joiningDate:'2026-09-03',counterCode:'C1',counterName:'Counter',workLocation:'Delhi',state:'Delhi',department:'Operations'};
- await check(imports.POST,{reason:'Retired onboarding',newEmployees:[newPerson],rows:[{...row,employeeId:'OUTSIDE_API'}]},422,'VALIDATION_ERROR');
- await check(imports.POST,{reason:'Unknown Employee Code',rows:[{...row,employeeId:'MISSING_API'}]},422,'VALIDATION_ERROR');
- assert.equal((await database.query("select count(*)::integer n from public.employees where company_id=$1 and employee_code='OUTSIDE_API'",[company])).rows[0].n,0);
+ await check(imports.POST,{reason:'Reviewed new employees',newEmployees:[newPerson],rows:[{...row,employeeId:'OUTSIDE_API'}]},201);
+ const added=(await database.query("select id from public.employees where company_id=$1 and employee_code='OUTSIDE_API'",[company])).rows[0];assert.ok(added);assert.equal((await database.query('select count(*)::integer n from public.attendance_records where employee_id=$1',[added.id])).rows[0].n,1);
+ await check(imports.POST,{reason:'Reviewed new employees',rows:[{...row,employeeId:'MISSING_API'}]},422,'NEW_EMPLOYEE_DETAILS_REQUIRED');
+ await check(imports.POST,{reason:'Atomic invalid batch',newEmployees:[{...newPerson,employeeCode:'ROLLBACK_API'}],rows:[{...row,employeeId:'ROLLBACK_API'},row]},409,'CONFLICT');
+ assert.equal((await database.query("select count(*)::integer n from public.employees where company_id=$1 and employee_code='ROLLBACK_API'",[company])).rows[0].n,0);
+ // Keep the original completeness fixture restricted to its original employee.
+ await database.exec('reset role');await database.query('delete from public.attendance_records where employee_id=$1',[added.id]);await database.query('delete from public.employees where id=$1',[added.id]);await database.exec('set role authenticated');
  const remaining=Array.from({length:27},(_,index)=>({...row,date:'2026-09-'+String(index+4).padStart(2,'0'),status:(index+4)%7===0?'Weekly Off':'Present'}));
  await check(attendance.POST,{rows:remaining},200);
  await check(period.POST,{month:'2026-09'},200);
  await check(attendance.POST,{allowUpdate:true,reason:'Correction',rows:[row]},409,'ATTENDANCE_LOCKED');
- await check(imports.POST,{reason:'Locked onboarding',newEmployees:[{...newPerson,employeeCode:'LOCKED_API'}],rows:[{...row,employeeId:'LOCKED_API'}]},422,'VALIDATION_ERROR');
+ await check(imports.POST,{reason:'Locked onboarding',newEmployees:[{...newPerson,employeeCode:'LOCKED_API'}],rows:[{...row,employeeId:'LOCKED_API'}]},409,'ATTENDANCE_LOCKED');
  assert.equal((await database.query("select count(*)::integer n from public.employees where company_id=$1 and employee_code='LOCKED_API'",[company])).rows[0].n,0);
  await check(period.POST,{month:'2026-09',reopen:true,reason:'Approved correction'},200);
  assert.equal((await database.query('select status from public.attendance_records where employee_id=$1 and date=$2',[employee,'2026-09-03'])).rows[0].status,'Half Day');

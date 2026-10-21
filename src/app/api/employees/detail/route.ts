@@ -4,7 +4,7 @@ import { ApiError, databaseError, endpoint, result } from '@/server/http';
 export const GET = endpoint(async request => {
   const { client, companyId } = await tenant(request);
   const id = z.string().uuid().parse(new URL(request.url).searchParams.get('id'));
-  const fields='master_imported,counter_code,counter_name,client_status,manager_id,id,employee_code,first_name,last_name,email,phone,status,joining_date,exit_date,work_location,state,category,employment_type,version,departments(name),designations(name)';
+  const fields='counter_code,counter_name,client_status,manager_id,id,employee_code,first_name,last_name,email,phone,status,joining_date,exit_date,work_location,state,category,employment_type,version,departments(name),designations(name)';
   let employee=await client.from('employees').select(fields).eq('company_id',companyId).eq('id',id).maybeSingle();
   if(employee.error&&['42703','PGRST204'].includes(employee.error.code))employee=await client.from('employees').select(fields.replace('counter_code,counter_name,client_status,','')).eq('company_id',companyId).eq('id',id).maybeSingle();
   databaseError(employee.error);

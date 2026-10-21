@@ -38,7 +38,6 @@ export interface StatutoryDetails {
 }
 
 export interface Employee {
-  masterImported?: boolean;
   counterCode?:string;
   counterName?:string;
   clientStatus?:'Active'|'Left'|'Rejoined'|null;

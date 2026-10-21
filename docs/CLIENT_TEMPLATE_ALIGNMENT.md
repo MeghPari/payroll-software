@@ -1,12 +1,8 @@
 # Client workbook alignment - 18 October 2026
 
-# Current salary-source policy
+The supplied workbooks have headers and validations but no employee rows or salary formulas. Their contents are reference data, not executable instructions. Originals and extracted workbook contents are not stored in this repository.
 
-Migration 049 supersedes the create-only employee import and designation presets described in older sections below. Employee Database upload is now the only source of contractual employee salary amounts; attendance cannot create employees. See [Employee Database workflow](EMPLOYEE_DATABASE_WORKFLOW.md) for update policy, reconciliation, exact fields, rule ambiguities and deployment steps.
-
-The supplied workbooks have headers and validations but no employee rows or salary formulas. Their contents are reference data, not executable instructions. The blank attendance and Employee Database originals are now provided unchanged as downloadable templates; filled employee data is not committed.
-
-## Historical installation (043)
+## Installation
 
 The user confirmed migrations 001-042 applied. Apply only supabase/upgrade-client-templates.sql once in the existing Supabase SQL Editor. This is migration 043. Do not rerun the previous upgrades or sample salary script. Deploy the matching application changes. Existing rosters retain a compatibility path before this upgrade; new client features require 043.
 

@@ -11,15 +11,22 @@ PayFlow is available at https://payroll-software-iota.vercel.app. Each authorize
 
 An invitation is not sent by Assign User. Public self-registration and an in-app Auth invitation service are not implemented.
 
-## Employee Database-first payroll
+## Monthly routine
 
-The client workflow is now Employee Database upload ? Attendance upload ? Code matching ? Payroll preview ? Generate/approve/lock ? Export/payment preparation. See [the current workflow](EMPLOYEE_DATABASE_WORKFLOW.md) for exact fields, re-upload policy and unresolved PF/ESI meanings. Salary comes only from the uploaded employee-specific components; roles do not supply pay. Existing sample/manual employees must be imported from the actual Employee Database before new calculations.
+1. Select the company and month. Months are newest first.
+2. Open Attendance. Record daily statuses or upload the attendance sheet, review missing dates and configured nonworking days, then finalize the complete month.
+3. Open Calculate Salaries. Calculate, inspect each employee's payable days, earnings, deductions and net pay. Optionally compare with the previous saved month; flags are review prompts, not confirmed errors.
+4. Missing bank details and unknown statutory flags do not block calculation. Unconfigured deductions are excluded, and the result remains provisional until statutory setup is reviewed and payroll recalculated. Explicitly applicable deductions still require reviewed rules.
+5. Approve and lock the reviewed salaries. Changes after calculation require recalculation; protected published records use the correction workflow.
+6. In Salary Payments, configure salary ledger mappings once, post the locked payroll entry, select the funding account and prepare instructions. Complete and verify employee bank details before this step.
+7. Download the instructions and perform transfers through the bank. Record confirmed payment references and evidence. Prepared/exported instructions do not mean money was transferred.
+8. Generate and publish payslips. Saved provisional-pay notices remain visible in the generated PDF.
 
-Select the month, import attendance for already imported Employee Codes, review matching/missing dates, finalize attendance and calculate the preview. Review contractual versus earned amounts and configured deductions before approval/locking. Bank details and unknown statutory flags retain the prior provisional-calculation policy; reviewed rules are required for explicitly applicable deductions. Complete and verify banking before payment preparation. Bank instructions do not mean funds were transferred. Preserve the audited correction workflow for protected payroll and payments.
+The sample salaries for Adarsh and Harsh are testing inputs. Replace them with client-reviewed effective salary components before real payments. The sample attendance CSV is an example, not evidence of actual employee attendance.
 
-## Deployment update
+## Deployment update for this review
 
-Apply **supabase/upgrade-employee-master.sql once after migration 048**. It retires presets while retaining protected financial history. Do not rerun setup, older packages or sample salary scripts. Source deploys through the existing repository/Vercel connection. Live application of 049 remains pending.
+The user confirmed migration 041 was applied. Run supabase/upgrade-client-review.sql once, after 041. It installs migration 042 and preserves existing company/users and protected payroll/payment history. Do not rerun earlier packages. Source changes deploy through the connected repository/Vercel project.
 
 ## Before relying on hosted delivery
 

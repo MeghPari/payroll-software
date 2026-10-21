@@ -1,6 +1,6 @@
 import { tenantApi } from '@/lib/tenant-api';
 import { employeeView, type EmployeeRow } from '@/domain/employee-view';
-import type { Employee, EmployeeFilters, EmploymentStatus, ExitRecord, StatusChangeRecord } from '@/types';
+import type { Employee, EmployeeFilters, EmploymentStatus, ExitRecord, ImportRowResult, UploadRecord, StatusChangeRecord } from '@/types';
 
 export type EmployeeCreate = Pick<Employee,'firstName'|'lastName'|'email'|'phone'|'department'|'designation'|'joiningDate'|'workLocation'|'state'|'employmentType'> & Partial<Employee>;
 function input(data: EmployeeCreate) {
@@ -67,7 +67,28 @@ export async function getStatusHistory(employeeId:string):Promise<StatusChangeRe
  return (await detail(employeeId)).history.map(row=>({id:row.id,employeeId:row.employee_id,previousStatus:row.previous_status,newStatus:row.new_status,effectiveDate:row.effective_date,reason:row.reason,remarks:row.remarks,changedBy:row.changed_by,changedOn:row.created_at}));
 }
 export async function getExitRecord(id?:string):Promise<ExitRecord|undefined> {if(!id)return undefined;return(await tenantApi<ExitRecord|null>(`employees/exit?employeeId=${encodeURIComponent(id)}`))??undefined;}
+export const EMPLOYEE_IMPORT_COLUMNS=['Employee ID','First Name','Last Name','Official Email','Mobile Number','Date of Joining','Employment Type','Department','Designation','Work Location','State','PAN','UAN'] as const;
+export interface EmployeeImportRow {employeeId:string;firstName:string;lastName:string;dateOfBirth:string;gender:string;personalEmail:string;officialEmail:string;mobile:string;dateOfJoining:string;employmentType:string;department:string;designation:string;workLocation:string;state:string;pan:string;aadhaar:string;uan:string;ctc:string;status:string}
+export async function validateEmployeeImport(rows:EmployeeImportRow[]):Promise<ImportRowResult<EmployeeImportRow>[]> {
+ const existing=await getEmployees(), seen=new Set(existing.map(e=>e.employeeCode)), uans=new Set<string>();
+ return rows.map((data,index)=>{const issues:string[]=[];
+  if(!/^[A-Za-z0-9_-]{1,40}$/.test(data.employeeId))issues.push('Valid employee code is required.');
+  if(seen.has(data.employeeId))issues.push('Duplicate employee code.');seen.add(data.employeeId);
+  if(!data.firstName.trim()||!data.lastName.trim())issues.push('First and last name required.');
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.officialEmail))issues.push('Valid email required.');
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(data.dateOfJoining)||Number.isNaN(Date.parse(data.dateOfJoining)))issues.push('Valid joining date required.');
+  if(data.pan&&!/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(data.pan))issues.push('Invalid PAN.');
+  if(data.uan&&(!/^[0-9]{12}$/.test(data.uan)||uans.has(data.uan)))issues.push('Invalid or duplicate UAN.');if(data.uan)uans.add(data.uan);
+  if(data.aadhaar||data.ctc||data.dateOfBirth||data.personalEmail||data.gender)issues.push('This employee import only supports template fields. Configure personal details and salary separately.');
+  if(data.status&&data.status!=='Active')issues.push('Import starts employees as Active; use the status workflow for changes.');
+  return {row:index+1,data,status:issues.length?'Error':'Valid',issues};});
+}
+export async function bulkImportEmployees(rows:EmployeeImportRow[]):Promise<UploadRecord> {
+ const validation=await validateEmployeeImport(rows);if(validation.some(r=>r.status!=='Valid'))throw new Error('Resolve import errors first.');
+ return tenantApi('employees/import',{method:'POST',body:JSON.stringify({rows:rows.map(row=>({employeeCode:row.employeeId,firstName:row.firstName,lastName:row.lastName,email:row.officialEmail,phone:row.mobile,joiningDate:row.dateOfJoining,department:row.department,designation:row.designation,workLocation:row.workLocation,state:row.state,employmentType:row.employmentType||'Full-time',statutory:{pan:row.pan,uan:row.uan}}))})});
+}
 async function bulk(ids:string[],field:string,value:string|boolean) {await tenantApi('employees/bulk',{method:'POST',body:JSON.stringify({ids,field,value})});}
+export async function bulkAssignSalaryStructure(ids:string[],value:string) {await bulk(ids,'salaryStructureId',value);}
 export async function bulkSetDepartment(ids:string[],value:Employee['department']) {await bulk(ids,'department',value);}
 export async function bulkSetWorkLocation(ids:string[],value:string) {await bulk(ids,'workLocation',value);}
 export async function bulkSetState(ids:string[],value:string) {await bulk(ids,'state',value);}

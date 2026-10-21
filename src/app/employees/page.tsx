@@ -10,6 +10,7 @@ import {
   Ban,
   UserX,
   Plus,
+  Upload,
   SlidersHorizontal,
   Eye,
   Pencil,
@@ -43,6 +44,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { EmployeeDetailDrawer } from "@/components/employees/employee-detail-drawer";
+import { AddEmployeeDialog } from "@/components/employees/add-employee-dialog";
 import { BulkUploadEmployeesDialog } from "@/components/employees/bulk-upload-employees-dialog";
 import { BulkActionDialog } from "@/components/employees/bulk-action-dialog";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
@@ -84,12 +86,14 @@ function EmployeesPageContent() {
   const [state, setState] = useState("All");
   const [status, setStatus] = useState(searchParams.get("status") ?? "All");
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [error,setError] = useState('');
   const companyId = useSessionStore(s=>s.companyId);
   const departments = Array.from(new Set(employees.map(e=>e.department).filter(Boolean)));
   const workLocations = Array.from(new Set(employees.map(e=>e.workLocation).filter(Boolean)));
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [bulkUploadOpen, setBulkUploadOpen] = useState(() => searchParams.get("add") === "1");
+  const [addOpen, setAddOpen] = useState(() => searchParams.get("add") === "1");
+  const [bulkUploadOpen, setBulkUploadOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkAction, setBulkAction] = useState<null | "department" | "location" | "state">(null);
   const [pfConfirm, setPfConfirm] = useState<null | boolean>(null);
@@ -206,7 +210,7 @@ function EmployeesPageContent() {
           actions={[
             { label: "View Profile", icon: <Eye className="h-4 w-4" />, onClick: () => router.push(`/employees/${row.original.id}`) },
             { label: "Quick View", icon: <Eye className="h-4 w-4" />, onClick: () => openDrawer(row.original) },
-            { label: "Edit Employee", icon: <Pencil className="h-4 w-4" />, onClick: () => {if(!permitted('employees.write')){toast.error('Permission denied.');return;}setBulkUploadOpen(true);} },
+            { label: "Edit Employee", icon: <Pencil className="h-4 w-4" />, onClick: () => {if(!permitted('employees.write')){toast.error('Permission denied.');return;}setEditingEmployee(row.original);setAddOpen(true);} },
             {
               label: "Employment Status",
               icon: <Trash2 className="h-4 w-4" />,
@@ -222,13 +226,16 @@ function EmployeesPageContent() {
   return (
     <div>
       <PageHeader
-        title="Employee Database"
+        title="Employees"
         subtitle="Manage your organization's employees and their details."
         actions={
           <>
             {permitted('employees.sensitive')&&permitted('salary.read')&&<Button variant="outline" disabled={clientExporting} onClick={exportClientDatabase}>Export client database</Button>}
-            <Button className="gap-1.5" disabled={!permitted('employees.write')} onClick={() => setBulkUploadOpen(true)}>
-              <Plus className="h-4 w-4" /> Upload Employee Database
+            <Button variant="outline" className="gap-1.5" disabled={!permitted('employees.write')} onClick={() => setBulkUploadOpen(true)}>
+              <Upload className="h-4 w-4" /> Bulk Upload
+            </Button>
+            <Button className="gap-1.5" disabled={!permitted('employees.write')} onClick={() => {setEditingEmployee(null);setAddOpen(true);}}>
+              <Plus className="h-4 w-4" /> Add Employee
             </Button>
           </>
         }
@@ -297,14 +304,14 @@ function EmployeesPageContent() {
                 <DropdownMenuGroup>
                   <DropdownMenuLabel>Employee Fields</DropdownMenuLabel>
                 </DropdownMenuGroup>
-                <DropdownMenuItem onClick={() => setBulkUploadOpen(true)}>
-                  <Building2 className="h-4 w-4" /> Import department changes
+                <DropdownMenuItem onClick={() => setBulkAction("department")}>
+                  <Building2 className="h-4 w-4" /> Change Department
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setBulkUploadOpen(true)}>
-                  <MapPin className="h-4 w-4" /> Import location changes
+                <DropdownMenuItem onClick={() => setBulkAction("location")}>
+                  <MapPin className="h-4 w-4" /> Set Work Location
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setBulkUploadOpen(true)}>
-                  <MapPin className="h-4 w-4" /> Import state changes
+                <DropdownMenuItem onClick={() => setBulkAction("state")}>
+                  <MapPin className="h-4 w-4" /> Update State
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuGroup>
@@ -342,12 +349,13 @@ function EmployeesPageContent() {
       </SectionCard>
 
       <EmployeeDetailDrawer employee={selectedEmployee} open={drawerOpen} onOpenChange={setDrawerOpen} />
+      <AddEmployeeDialog employee={editingEmployee} open={addOpen} onOpenChange={setAddOpen} onCreated={() => refresh()} />
       <BulkUploadEmployeesDialog open={bulkUploadOpen} onOpenChange={setBulkUploadOpen} onImported={refresh} />
 
       <BulkActionDialog
         open={bulkAction === "department"}
         onOpenChange={(o) => !o && setBulkAction(null)}
-        title="Import department changes"
+        title="Change Department"
         description={`Update department for ${selectedIds.size} selected employee(s).`}
         fieldLabel="Department"
         type="select"
@@ -357,7 +365,7 @@ function EmployeesPageContent() {
       <BulkActionDialog
         open={bulkAction === "location"}
         onOpenChange={(o) => !o && setBulkAction(null)}
-        title="Import location changes"
+        title="Set Work Location"
         description={`Update work location for ${selectedIds.size} selected employee(s).`}
         fieldLabel="Work Location"
         type="text"
@@ -366,7 +374,7 @@ function EmployeesPageContent() {
       <BulkActionDialog
         open={bulkAction === "state"}
         onOpenChange={(o) => !o && setBulkAction(null)}
-        title="Import state changes"
+        title="Update State"
         description={`Update state for ${selectedIds.size} selected employee(s).`}
         fieldLabel="State"
         type="select"
@@ -377,7 +385,7 @@ function EmployeesPageContent() {
         open={pfConfirm !== null}
         onOpenChange={(o) => !o && setPfConfirm(null)}
         title={`${pfConfirm ? "Enable" : "Disable"} PF for ${selectedIds.size} employees?`}
-        description="This records explicit applicability. It does not infer applicability from salary references or designation."
+        description="This overrides the category-based default and marks the change as an admin override."
         confirmLabel={pfConfirm ? "Enable PF" : "Disable PF"}
         onConfirm={async () => {
           await applyPFESI("pfApplicable", !!pfConfirm);
@@ -388,7 +396,7 @@ function EmployeesPageContent() {
         open={esiConfirm !== null}
         onOpenChange={(o) => !o && setEsiConfirm(null)}
         title={`${esiConfirm ? "Enable" : "Disable"} ESI for ${selectedIds.size} employees?`}
-        description="This records explicit applicability. It does not infer applicability from salary references or designation."
+        description="This overrides the category-based default and marks the change as an admin override."
         confirmLabel={esiConfirm ? "Enable ESI" : "Disable ESI"}
         onConfirm={async () => {
           await applyPFESI("esiApplicable", !!esiConfirm);
