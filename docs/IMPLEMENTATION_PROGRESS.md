@@ -1,5 +1,18 @@
 # Implementation progress - 14 October 2026
 
+## 22 October 2026 - Clear attendance from Monthly review
+
+Added Clear attendance at the bottom of Monthly review only. A mandatory remark
+and typed month confirmation are required, with current count/revision checks.
+Super Admin and HR Admin can clear the selected company's open month; finalized
+attendance must be reopened, and payroll with approval, payslip, accounting or
+payment history is protected. The action is audited and resets unapproved salary
+previews; employee dataset salaries, other months, leave requests and upload
+history are retained. Apply supabase/upgrade-clear-month-attendance.sql after
+the dataset salary upgrade. Applying the SQL does not delete attendance.
+Local tests cover the current schema and the earlier 049/050 rollback schema;
+live application and signed-in visual acceptance remain pending.
+
 ## 21 October 2026 - Employee dataset supplies salary amounts
 
 Supersedes the designation salary defaults below. Upload employee dataset with

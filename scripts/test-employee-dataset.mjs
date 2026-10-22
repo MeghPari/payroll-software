@@ -11,7 +11,7 @@ try{
  create function auth.uid()returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
  grant usage on schema auth to authenticated,anon,service_role;`);
  const directory=new URL('../supabase/migrations/',import.meta.url);
- for(const name of(await readdir(directory)).filter(n=>n.endsWith('.sql')&&n!==migration).sort())await db.exec((await readFile(new URL(name,directory),'utf8')).replace('create extension if not exists pgcrypto;',''));
+ for(const name of(await readdir(directory)).filter(n=>n.endsWith('.sql')&&n<migration).sort())await db.exec((await readFile(new URL(name,directory),'utf8')).replace('create extension if not exists pgcrypto;',''));
  const fixture=(await readFile(new URL('../supabase/tests/department_designations.sql',import.meta.url),'utf8')).replaceAll('48000000-','59000000-').replace(/rollback;\s*$/,'commit;');
  await db.exec(fixture);
  const snapshot=async()=>(await db.query(`select jsonb_build_object('employees',(select jsonb_agg(to_jsonb(e)order by id)from employees e),'attendance',(select jsonb_agg(to_jsonb(a)order by id)from attendance_records a),'payroll',(select jsonb_agg(to_jsonb(r)order by id)from payroll_runs r),'calculated',(select jsonb_agg(to_jsonb(e)order by employee_id)from payroll_run_employees e)) data`)).rows[0].data;

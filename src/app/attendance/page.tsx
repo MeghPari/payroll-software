@@ -1,5 +1,6 @@
 "use client";
 import Link from 'next/link';
+import {ClearMonthAttendance} from '@/components/attendance/clear-month-attendance';
 import { MonthlyAttendanceEditor } from '@/components/attendance/monthly-attendance-editor';
 import { dailyAttendanceRoster } from '@/domain/daily-attendance-roster';
 import { PayrollNavigation } from '@/components/payroll/payroll-navigation';
@@ -446,6 +447,7 @@ function AttendanceRegisterPeriod({employees,loading:employeesLoading,month,setM
         loading={finalizing}
         onConfirm={handleFinalize}
       />
+      <div className="border-t pt-5"><ClearMonthAttendance key={monthKey} month={monthKey} label={month} onDeleted={refresh}/></div>
     </div>
   );
 }
