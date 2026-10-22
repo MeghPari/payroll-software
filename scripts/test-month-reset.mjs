@@ -1,0 +1,66 @@
+import {PGlite}from '@electric-sql/pglite';
+import {readFile,readdir,mkdir,writeFile}from 'node:fs/promises';
+import assert from 'node:assert/strict';
+import ts from 'typescript';
+const db=new PGlite();
+try{
+ await db.exec(`create role anon;create role authenticated;create role service_role;create schema auth;create table auth.users(id uuid primary key,email text,email_confirmed_at timestamptz);create function auth.uid()returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;grant usage on schema auth to authenticated,anon,service_role;`);
+ const dir=new URL('../supabase/migrations/',import.meta.url);
+ for(const name of(await readdir(dir)).filter(n=>n.endsWith('.sql')).sort())await db.exec((await readFile(new URL(name,dir),'utf8')).replace('create extension if not exists pgcrypto;',''));
+ for(const file of ['disbursement_workflows.sql','invoice_workflows.sql'])await db.exec((await readFile(new URL('../supabase/tests/'+file,import.meta.url),'utf8')).replace(/rollback;\s*$/,'commit;'));
+ const c='40000000-0000-4000-8000-000000000011',u='40000000-0000-4000-8000-000000000001',e='40000000-0000-4000-8000-000000000021';
+ await db.exec(`update public.user_company_roles set role='Super Admin'where company_id='${c}';select set_config('request.jwt.claim.sub','${u}',false);select public.generate_payslips('${c}','2026-09-01');select public.publish_payslips('${c}','2026-09-01');insert into public.attendance_periods(company_id,month,finalized_at)values('${c}','2026-09-01',now());insert into public.attendance_records(company_id,employee_id,date,status,source,modified_by)values('${c}','${e}','2026-09-01','Present','Manual','${u}'),('${c}','${e}','2026-09-30','Absent','CSV','${u}'),('${c}','${e}','2026-10-01','Present','Manual','${u}');insert into public.payroll_runs(company_id,month,status)values('${c}','2026-10-01','Locked');`);
+ const foreign=async()=>(await db.query("select jsonb_build_object('invoices',(select jsonb_agg(to_jsonb(i)order by id)from public.invoices i),'journals',(select jsonb_agg(to_jsonb(j)order by id)from public.journal_entries j where company_id<>$1),'employees',(select jsonb_agg(to_jsonb(e)order by id)from public.employees e),'banks',(select jsonb_agg(to_jsonb(b)order by employee_id)from public.employee_bank_details b)) value",[c])).rows[0].value;
+ const before=await foreign();
+ const transaction=(await db.query('select journal_id,bank_id from public.bank_transactions where company_id=$1 order by id limit 1',[c])).rows[0];
+ await db.query(`insert into public.bank_reconciliations(id,company_id,bank_id,from_date,to_date,opening_minor,closing_minor,reference,review_note,status,created_by)values('61000000-0000-4000-8000-000000000001',$1,$2,'2026-09-01','2026-10-31',0,-10000,'RESET-STATEMENT','Sample reconciliation','Reconciled',$3)`,[c,transaction.bank_id,u]);
+ await db.query(`insert into public.bank_statement_lines values($1,'61000000-0000-4000-8000-000000000001',1,'2026-09-29','RESET-LINE',-10000);`,[c]);
+ await db.query(`insert into public.bank_reconciliation_matches(company_id,reconciliation_id,line_no,bank_id,journal_id,matched_by)values($1,'61000000-0000-4000-8000-000000000001',1,$2,$3,$4)`,[c,transaction.bank_id,transaction.journal_id,u]);
+ await db.query(`insert into public.cash_flow_reviews(company_id,journal_id,net_minor,allocations,review_reference,reviewed_by)values($1,$2,-10000,'[]','RESET-CASH',$3)`,[c,transaction.journal_id,u]);
+ await db.query(`insert into public.cash_flow_review_history values($1,$2,1,'{}')`,[c,transaction.journal_id]);
+ await db.exec('set role authenticated');
+ const preview=async()=>(await db.query('select public.attendance_month_delete_preview($1,$2::date) value',[c,'2026-09-01'])).rows[0].value;
+ const p=await preview();assert.equal(p.blockedReason,null);assert.equal(p.hasPayroll,true);assert.equal(p.finalized,true);assert.equal(p.counts.payslips,1);assert.equal(p.counts.payments,2);assert.ok(p.counts.journals>=5);
+ const reset=(ack=true,reason='Reset user-confirmed sample September records',rev=p.revision)=>db.query('select public.reset_attendance_payroll_month($1,$2::date,$3,$4,$5,$6) count',[c,'2026-09-01',rev,2,reason,ack]);
+ await assert.rejects(reset(false),e=>e.code==='P0050');
+ await assert.rejects(reset(true,'   '),e=>e.code==='22023');
+ await assert.rejects(reset(true,'Valid remark','0'),e=>e.code==='40001');
+ await assert.rejects(db.query('select public.delete_month_attendance($1,$2::date,$3,2,$4)',[c,'2026-09-01',p.revision,'Legacy bypass']),e=>e.code==='P0050');
+ // A correction in another month must not be silently deleted.
+ await db.exec('reset role');
+ await db.query(`insert into public.payroll_adjustments(company_id,employee_id,month,kind,amount_minor,reference,review_note,reviewed_by,source_run_id,source_run_version,source_snapshot)values($1,$2,'2026-10-01','arrears',100,'OTHER-MONTH','Other month correction',$3,'40000000-0000-4000-8000-000000000031',1,'{}')`,[c,e,u]);
+ await db.exec('set role authenticated');assert.match((await preview()).blockedReason,/Another month/);
+ await db.exec(`reset role;delete from public.payroll_adjustments where company_id='${c}';set role authenticated;`);
+ const current=await preview();assert.equal((await reset(true,'Reset confirmed sample month',current.revision)).rows[0].count,2);
+ await db.exec('reset role');
+ assert.equal((await db.query('select count(*)::int count from public.payroll_runs where company_id=$1 and month=$2',[c,'2026-09-01'])).rows[0].count,0);
+ for(const table of ['payslips','disbursement_batches','disbursement_items','disbursement_payments','salary_payment_attempts','payroll_posting_details','bank_transactions','journal_entries'])assert.equal((await db.query(`select count(*)::int count from public.${table} where company_id=$1`,[c])).rows[0].count,0,table);
+ assert.equal((await db.query('select count(*)::int count from public.attendance_records where company_id=$1 and date=$2',[c,'2026-10-01'])).rows[0].count,1);
+ assert.equal((await db.query('select status from public.payroll_runs where company_id=$1',[c])).rows[0].status,'Locked');
+ assert.deepEqual(await foreign(),before);
+ assert.equal((await db.query('select status from public.bank_reconciliations where company_id=$1',[c])).rows[0].status,'Open');
+ assert.equal((await db.query('select count(*)::int n from public.bank_statement_lines where company_id=$1',[c])).rows[0].n,1);
+ for(const table of ['bank_reconciliation_matches','cash_flow_reviews','cash_flow_review_history'])assert.equal((await db.query(`select count(*)::int n from public.${table} where company_id=$1`,[c])).rows[0].n,0);
+ assert.equal((await db.query('select count(*)::int count from public.payroll_month_reset_archives where company_id=$1',[c])).rows[0].count,1);
+ assert.equal((await db.query("select metadata->>'reason' reason from public.audit_logs where company_id=$1 and action='Attendance and Payroll Month Reset'",[c])).rows[0].reason,'Reset confirmed sample month');
+ // Exercise the current HTTP endpoint, including a payroll month with no attendance.
+ await db.query("insert into public.payroll_runs(company_id,month,status)values($1,'2026-11-01','Locked')",[c]);
+ await db.exec('set role authenticated');
+ const out=new URL('../.test-output/month-reset-api/',import.meta.url);await mkdir(out,{recursive:true});globalThis.monthResetDb=db;
+ async function compile(path,name,replacements={}){let source=(await readFile(new URL('../'+path,import.meta.url),'utf8')).replace("import 'server-only';",'');for(const[a,b]of Object.entries(replacements))source=source.replaceAll(a,b);await writeFile(new URL(name,out),ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.ESNext}}).outputText);}
+ await compile('src/server/http.ts','http.mjs',{'./env':'./env.mjs'});await writeFile(new URL('env.mjs',out),"export function getEnv(){return{APP_URL:'http://localhost:3000'}}");
+ await writeFile(new URL('auth.mjs',out),`import {ApiError}from './http.mjs';export async function tenant(req,permission){const c=req.headers.get('x-company-id'),db=globalThis.monthResetDb;if(!c||!(await db.query('select public.has_permission($1,$2) ok',[c,permission])).rows[0].ok)throw new ApiError(403,'FORBIDDEN','Denied');return{companyId:c,client:{async rpc(name,p){try{const q=name==='attendance_month_delete_preview'?'select public.attendance_month_delete_preview($1,$2::date) value':'select public.reset_attendance_payroll_month($1,$2::date,$3,$4,$5,$6) value';const args=name==='attendance_month_delete_preview'?[p.c,p.m]:[p.c,p.m,p.expected_revision,p.expected_count,p.remark,p.confirm_payroll];return{data:(await db.query(q,args)).rows[0].value,error:null}}catch(e){return{data:null,error:{code:e.code,message:e.message}}}}}}}`);
+ await compile('src/app/api/attendance/month/route.ts','route.mjs',{'@/server/auth':'./auth.mjs','@/server/http':'./http.mjs'});const route=await import(new URL('route.mjs',out));
+ const request=(method,body,company=c)=>new Request('http://localhost:3000/api/attendance/month?month=2026-11',{method,headers:{origin:'http://localhost:3000','content-type':'application/json','x-company-id':company},...(body?{body:JSON.stringify(body)}:{})});
+ const zero=(await(await route.GET(request('GET'))).json()).data;assert.equal(zero.hasPayroll,true);assert.equal(zero.count,0);
+ const input={month:'2026-11',confirmedMonth:'2026-11',expectedRevision:zero.revision,expectedCount:0,reason:'Reset empty payroll month'};
+ assert.equal((await route.DELETE(request('DELETE',input))).status,409);
+ assert.equal((await route.DELETE(request('DELETE',{...input,reason:' ',acknowledgePayrollReset:true}))).status,422);
+ assert.equal((await route.DELETE(request('DELETE',{...input,expectedRevision:'0',acknowledgePayrollReset:true}))).status,409);
+ assert.equal((await route.DELETE(request('DELETE',{...input,acknowledgePayrollReset:true},'30000000-0000-4000-8000-000000000011'))).status,403);
+ assert.equal((await route.DELETE(request('DELETE',{...input,acknowledgePayrollReset:true}))).status,200);
+ await db.exec(`reset role;update public.user_company_roles set role='HR Admin'where company_id='${c}';set role authenticated;`);
+ assert.match((await db.query('select public.attendance_month_delete_preview($1,$2::date) value',[c,'2026-10-01'])).rows[0].value.blockedReason,/administrator/);
+ assert.equal((await db.query('select count(*)::int count from public.payroll_month_reset_archives where company_id=$1',[c])).rows[0].count,0);
+ console.log('PASS complete locked/published/posted/paid month reset, payment reversals, attempts, archived preimages, mandatory remark/acknowledgement, stale denial, HR denial, cross-month correction protection and unchanged employee/other-month/invoice records. No live data changed.');
+}catch(e){console.error({message:e.message,code:e.code,where:e.where});process.exitCode=1;}finally{await db.close();delete globalThis.monthResetDb;}

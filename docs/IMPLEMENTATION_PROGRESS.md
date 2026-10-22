@@ -1,5 +1,17 @@
 # Implementation progress - 14 October 2026
 
+## 22 October 2026 - Full month reset after payroll
+
+Supersedes the approval/payment block described below. Clear attendance now warns
+when payroll exists and requires an explicit payroll-reset acknowledgement,
+typed month and remark. Super Admin can reset locked/published/paid monthly
+records and their linked journals while retaining employee dataset salary inputs.
+Row images are retained in a restricted reset archive and the audit trail records
+the action. Other-month corrections and shared invoice dependencies block rather
+than being silently deleted. Apply supabase/upgrade-reset-payroll-month.sql after
+the clear-attendance upgrade. Installation does not reset existing months.
+See docs/MONTH_RESET.md. Live application and signed-in visual acceptance pending.
+
 ## 22 October 2026 - Clear attendance from Monthly review
 
 Added Clear attendance at the bottom of Monthly review only. A mandatory remark

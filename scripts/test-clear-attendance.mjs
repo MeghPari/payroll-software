@@ -29,7 +29,7 @@ try{
  if(hasMarkers)await db.exec(`insert into public.attendance_master_matches(company_id,batch_id,employee_id,date)values('${c}','50000000-0000-4000-8000-000000000041','50000000-0000-4000-8000-000000000021','2026-05-01'),('${c}','50000000-0000-4000-8000-000000000041','50000000-0000-4000-8000-000000000021','2026-06-01');`);
  await db.exec(`set role authenticated;select set_config('request.jwt.claim.sub','${user}',false);`);
  const out=new URL('../.test-output/clear-attendance-api/',import.meta.url);await mkdir(out,{recursive:true});
- async function compile(path,name,replacements={}){let source=(await readFile(new URL('../'+path,import.meta.url),'utf8')).replace("import 'server-only';",'');for(const[from,to]of Object.entries(replacements))source=source.replaceAll(from,to);await writeFile(new URL(name,out),ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.ESNext}}).outputText);}
+ async function compile(path,name,replacements={}){let source=(path==='src/app/api/attendance/month/route.ts'?execFileSync('git',['show','1033e29:'+path],{encoding:'utf8'}):await readFile(new URL('../'+path,import.meta.url),'utf8')).replace("import 'server-only';",'');for(const[from,to]of Object.entries(replacements))source=source.replaceAll(from,to);await writeFile(new URL(name,out),ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.ESNext}}).outputText);}
  globalThis.clearAttendanceDb=db;
  await compile('src/server/http.ts','http.mjs',{'./env':'./env.mjs'});
  await writeFile(new URL('env.mjs',out),"export function getEnv(){return{APP_URL:'http://localhost:3000'}}");
