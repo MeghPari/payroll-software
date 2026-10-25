@@ -4,7 +4,8 @@ import { ApiError,body,databaseError,endpoint,result } from '@/server/http';
 import { missingAttendanceDates } from '@/domain/attendance-completeness';
 import { companyToday } from '@/domain/dates';
 export const GET=endpoint(async request=>{
- const {client,companyId}=await tenant(request);const month=z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).parse(new URL(request.url).searchParams.get('month'));
+ const importScope=new URL(request.url).searchParams.get('importScope')==='true';const {client,companyId}=await tenant(request,importScope?'attendance.write':undefined);const month=z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).parse(new URL(request.url).searchParams.get('month'));
+ if(importScope){const scope=await client.rpc('attendance_import_scope',{c:companyId,m:month+'-01'});databaseError(scope.error);return result(scope.data);}
  const response=await client.from('attendance_periods').select('month,finalized_at,finalized_by,version').eq('company_id',companyId).eq('month',`${month}-01`).maybeSingle();databaseError(response.error);return result(response.data);
 });
 export const POST=endpoint(async request=>{

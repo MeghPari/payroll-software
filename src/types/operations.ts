@@ -215,7 +215,7 @@ export type PayrollEligibility = "Eligible" | "Salary Hold" | "Exited" | "No Pay
 export type PayrollCalculationStatus = "Ready" | "Salary Hold" | "Attendance Issue" | "KYC Issue" | "Bank Details Missing" | "Error";
 
 export interface PayrollCalculation {
-  payrollBatch?:number;payrollStatus?:string;
+  payrollRunId?:string;payrollBatch?:number;payrollStatus?:string;
   setupWarnings?:import('@/domain/payroll-setup').PayrollSetupWarning[];
   earningsBreakdown?:Record<string,number>;
   deductionBreakdown?:Record<string,number>;
@@ -257,6 +257,7 @@ export interface PayrollValidationIssue {
 export type PayrollPeriodStatus = "Draft" | "Processing" | "Processed" | "Approved" | "Locked";
 
 export interface PayrollPeriod {
+  runId?:string;batchNumber?:number;
   version?: number;
   month: string;
   status: PayrollPeriodStatus;

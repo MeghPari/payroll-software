@@ -20,8 +20,8 @@ export const GET=endpoint(async request=>{
  return result({runs:monthRuns.data,run:run.data,attendanceFinalized:!!attendance.data?.finalized_at,snapshots,workflow:workflow.error?null:workflow.data});
 });
 export const POST=endpoint(async request=>{
- const input=await body(request,z.object({month:monthSchema,action:z.enum(['validate','calculate','approve','lock','unlock']),expectedVersion:z.number().int().positive().optional(),reason:z.string().max(1000).default('')}).strict());
- const permission={validate:'payroll.run',calculate:'payroll.run',approve:'payroll.approve',lock:'payroll.lock',unlock:'payroll.unlock'}[input.action];
+ const input=await body(request,z.object({month:monthSchema,action:z.enum(['validate','calculate','approve','lock','unlock','reopen']),runId:z.string().uuid().optional(),expectedVersion:z.number().int().positive().optional(),reason:z.string().max(1000).default('')}).strict());
+ const permission={validate:'payroll.run',calculate:'payroll.run',approve:'payroll.approve',lock:'payroll.lock',unlock:'payroll.unlock',reopen:'payroll.unlock'}[input.action];
  const {client,companyId}=await tenant(request,permission);
  // Migration 039 installs the exact rounding implementation and its provenance
  // table atomically. Do not calculate or approve with the known older method.
@@ -41,8 +41,15 @@ export const POST=endpoint(async request=>{
   databaseError(response.error);return result(response.data);
  }
  const expectedVersion=z.number().int().positive().parse(input.expectedVersion);
+ if(input.runId){const selected=await client.from('payroll_runs').select('id').eq('company_id',companyId).eq('month',input.month).eq('id',input.runId).maybeSingle();databaseError(selected.error);if(!selected.data)throw new ApiError(404,'NOT_FOUND','Payroll batch not found for this month.');}
+ if(input.action==='reopen'){
+  const selected_run=z.string().uuid().parse(input.runId);z.string().trim().min(3).max(1000).parse(input.reason);
+  const response=await client.rpc('reopen_payroll_batch',{c:companyId,selected_run,expected_version:expectedVersion,reason_text:input.reason});
+  if(response.error?.code==='P0053')throw new ApiError(409,'PAYROLL_CORRECTION_REQUIRED',response.error.message);
+  databaseError(response.error);return result({reopenedEmployees:response.data});
+ }
  if(input.action==='unlock')z.string().trim().min(1).parse(input.reason);
- const response=await client.rpc('transition_payroll',{c:companyId,m:input.month,action_text:input.action,expected_version:expectedVersion,reason_text:input.reason});
+ const response=input.runId?await client.rpc('transition_payroll_batch',{c:companyId,selected_run:input.runId,action_text:input.action,expected_version:expectedVersion,reason_text:input.reason}):await client.rpc('transition_payroll',{c:companyId,m:input.month,action_text:input.action,expected_version:expectedVersion,reason_text:input.reason});
  if(response.error?.code==='40001'&&response.error.message==='Payroll calculation method changed; recalculate before approval')throw new ApiError(409,'PAYROLL_RECALCULATE','Recalculate this unapproved payroll with the updated calculation method before approving it.');
  if(response.error?.code==='40001'&&response.error.message==='Payroll inputs changed; recalculate before approval')throw new ApiError(409,'PAYROLL_INPUTS_CHANGED','Salary, attendance or payroll configuration changed after calculation. Recalculate payroll before approving it.');
  if(response.error?.code==='23514'&&response.error.message==='Validation failed')throw new ApiError(422,'PAYROLL_NOT_READY','Payroll inputs no longer pass validation. Run Validate and resolve the listed issues before approval.');

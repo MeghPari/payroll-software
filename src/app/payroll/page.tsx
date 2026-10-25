@@ -90,6 +90,8 @@ function PayrollRunPagePeriodContent({month,onMonthChange}:{month:string;onMonth
   const [loading, setLoading] = useState(true);
 
 
+  const [approveTarget,setApproveTarget]=useState<{runId:string;version:number;count:number;batchNumber:number}|null>(null),[lockTarget,setLockTarget]=useState<typeof approveTarget>(null),[editTarget,setEditTarget]=useState<typeof approveTarget>(null);
+  const [editConfirm,setEditConfirm]=useState(false),[editReason,setEditReason]=useState('');
   const [approveConfirm, setApproveConfirm] = useState(false);
   const [lockConfirm, setLockConfirm] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -101,7 +103,7 @@ function PayrollRunPagePeriodContent({month,onMonthChange}:{month:string;onMonth
   function refresh(reloadEmployees=true) {
     setLoading(true);
     return Promise.all([reloadEmployees?getEmployees():Promise.resolve(employees),getPayrollRun(monthKey)]).then(([emp,run]) => {
-      const review=payrollReviewFromData(run,monthKey),per=payrollPeriodFromData(run,monthKey);
+      const review=payrollReviewFromData({...run,snapshots:run.snapshots.filter(row=>row.run_id===run.run?.id)},monthKey),per=payrollPeriodFromData(run,monthKey);
       setEmployees(emp);setRows(review);setPeriod(per);setFinalized(run.attendanceFinalized);
       setEligibility({Calculated:review.length});
       setLoading(false);
@@ -161,9 +163,10 @@ function PayrollRunPagePeriodContent({month,onMonthChange}:{month:string;onMonth
   }
 
   async function handleApprove() {
+    if(!approveTarget)return;
     setBusy("approve");
     try {
-      await payrollAction(monthKey,'approve',period?.version);
+      await payrollAction(monthKey,'approve',approveTarget.version,'',approveTarget.runId);
       toast.success(`Payroll approved for ${month}`);
       await refresh(false);
     } catch(error) {toast.error(error instanceof Error?error.message:"Payroll action failed.");} finally {
@@ -173,9 +176,10 @@ function PayrollRunPagePeriodContent({month,onMonthChange}:{month:string;onMonth
   }
 
   async function handleLock() {
+    if(!lockTarget)return;
     setBusy("lock");
     try {
-      await payrollAction(monthKey,'lock',period?.version);
+      await payrollAction(monthKey,'lock',lockTarget.version,'',lockTarget.runId);
       toast.success(`Payroll locked for ${month}`, { description: "Payslips and disbursement can now proceed." });
       await refresh(false);
     } catch(error) {toast.error(error instanceof Error?error.message:"Payroll action failed.");} finally {
@@ -184,10 +188,8 @@ function PayrollRunPagePeriodContent({month,onMonthChange}:{month:string;onMonth
     }
   }
 
-  async function handleUnlock() {
-    const reason=window.prompt('Reason for payroll correction');if(!reason?.trim())return;
-    try{await payrollAction(monthKey,'unlock',period?.version,reason);toast.info('Payroll unlocked for correction');await refresh(false);}catch(error){toast.error(error instanceof Error?error.message:'Unable to unlock payroll.');}
-  }
+  function requestEdit(){if(!period?.runId||!period.version||!rows.length)return;const target={runId:period.runId,version:period.version,count:rows.length,batchNumber:period.batchNumber??1};const reason=window.prompt('Reason for editing this payroll batch (at least 3 characters)');if(!reason?.trim())return;if(reason.trim().length<3){toast.error('Enter an edit reason of at least 3 characters.');return;}setEditTarget(target);setEditReason(reason.trim());setEditConfirm(true);}
+  async function handleReopen(){if(!editTarget)return;setBusy('reopen');try{await payrollAction(monthKey,'reopen',editTarget.version,editReason,editTarget.runId);setEditConfirm(false);toast.success('Batch reopened. Update the employee salary or attendance, then calculate again.');await refresh(false);}catch(error){toast.error(error instanceof Error?error.message:'Unable to reopen payroll.');}finally{setBusy(null);}}
 
   const isLocked = period?.status === "Locked";
   const nonPassedIssues = (validation?.issues ?? []).filter((i) => i.severity !== "Passed");
@@ -253,14 +255,14 @@ function PayrollRunPagePeriodContent({month,onMonthChange}:{month:string;onMonth
           <div className="flex items-center gap-2.5">
             <Lock className="h-4.5 w-4.5 text-danger" />
             <div>
-              <p className="text-sm font-semibold text-danger">This payroll period is locked.</p>
+              <p className="text-sm font-semibold text-danger">This payroll batch is locked.</p>
               <p className="text-xs text-foreground/70">
                 {period?.lockedOn?`Locked on ${new Date(period.lockedOn).toLocaleString('en-IN',{timeZone:'Asia/Kolkata'})}. `:''}Unlocking requires an authorized administrator and a correction reason.
               </p>
             </div>
           </div>
-          <Button variant="outline" size="sm" className="gap-1.5" disabled={!permitted("payroll.unlock")} onClick={handleUnlock}>
-            <LockOpen className="h-3.5 w-3.5" /> Unlock
+          <Button variant="outline" size="sm" className="gap-1.5" disabled={!permitted("payroll.unlock")} onClick={requestEdit}>
+            <LockOpen className="h-3.5 w-3.5" /> Edit this batch
           </Button>
         </div>
       )}
@@ -359,7 +361,7 @@ function PayrollRunPagePeriodContent({month,onMonthChange}:{month:string;onMonth
         </div>
       ) : (
         <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          <StatCard icon={Users} tone="blue" label="Total Employees" value={String(employees.length)} />
+          <StatCard icon={Users} tone="blue" label="Employees in this batch" value={String(rows.length)} />
           <StatCard icon={Wallet} tone="green" label="Gross Pay" value={formatINR(totals.grossPay)} />
           <StatCard icon={MinusCircle} tone="red" label="Total Deductions" value={formatINR(totals.deductions)} />
           <StatCard icon={HandCoins} tone="purple" label="Net Payable" value={formatINR(totals.netPayable)} />
@@ -397,7 +399,7 @@ function PayrollRunPagePeriodContent({month,onMonthChange}:{month:string;onMonth
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><p className="text-sm text-muted-foreground">Select an employee for earnings and deduction details.</p><Button variant="outline" size="sm" onClick={()=>setShowDetails(value=>!value)} aria-pressed={showDetails}>{showDetails?'Simple view':'Show all salary columns'}</Button></div>
       <SectionCard
         title="Employee salaries"
-        subtitle={`${employees.length} employees · ${month} · Click a row for the full calculation breakdown`}
+        subtitle={`${rows.length} calculated employees in batch ${period?.batchNumber??1} · ${month} · Click a row for the full calculation breakdown`}
         actions={
           <Button variant="outline" size="sm" className="gap-1.5" onClick={handleCalculate} disabled={loading||!!busy||!permitted("payroll.run")}>
             <RefreshCcw className="h-3.5 w-3.5" /> Calculate ready employees
@@ -408,11 +410,13 @@ function PayrollRunPagePeriodContent({month,onMonthChange}:{month:string;onMonth
         <DataTable columns={showDetails?columns:columns.filter(column=>['employeeName','payableDays','lopDays','adjustedGross','deductions','net','status'].includes(column.id??''))} data={rows} loading={loading} emptyTitle="No calculated salaries yet" emptyDescription="Complete attendance for an employee, then calculate ready employees above." pageSize={10} onRowClick={(row) => setDrawerEmployee(employeeMap.get(row.employeeId) ?? null)} />
       </SectionCard>
 
+      {rows.length>0&&!isLocked&&<div className="mt-4"><Button variant="outline" disabled={loading||!!busy||!permitted('payroll.unlock')} onClick={requestEdit}>Edit / recalculate this batch</Button></div>}
+      <ConfirmDialog open={editConfirm} onOpenChange={open=>{if(!busy)setEditConfirm(open);}} title={`Edit batch ${editTarget?.batchNumber??1} for ${month}?`} description={`Reopen only the ${editTarget?.count??0} calculated employees shown here. Their calculated figures will be archived and cleared so salary or attendance can be corrected and recalculated. Attendance, salary setup, other employees and other batches are retained. Reason: ${editReason}`} confirmLabel="Reopen for editing" loading={busy==='reopen'} onConfirm={handleReopen}/>
       <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <Button variant="outline" size="lg" className="gap-1.5" disabled={loading||!!busy||isLocked || !!period?.approved||!period?.validated||!permitted("payroll.approve")} onClick={() => setApproveConfirm(true)}>
+        <Button variant="outline" size="lg" className="gap-1.5" disabled={loading||!!busy||!rows.length||isLocked || !!period?.approved||!period?.validated||!permitted("payroll.approve")} onClick={() => {if(!period?.runId||!period.version)return;setApproveTarget({runId:period.runId,version:period.version,count:rows.length,batchNumber:period.batchNumber??1});setApproveConfirm(true);}}>
           <PlayCircle className="h-4 w-4" /> Approve Payroll
         </Button>
-        <Button size="lg" className="gap-1.5" disabled={loading||!!busy||isLocked || !period?.approved||!permitted("payroll.lock")} onClick={() => setLockConfirm(true)}>
+        <Button size="lg" className="gap-1.5" disabled={loading||!!busy||!rows.length||isLocked || !period?.approved||!permitted("payroll.lock")} onClick={() => {if(!period?.runId||!period.version)return;setLockTarget({runId:period.runId,version:period.version,count:rows.length,batchNumber:period.batchNumber??1});setLockConfirm(true);}}>
           <ShieldCheck className="h-4 w-4" /> {isLocked ? "Payroll Locked" : "Lock approved payroll"}
         </Button>
       </div>
@@ -420,8 +424,8 @@ function PayrollRunPagePeriodContent({month,onMonthChange}:{month:string;onMonth
       <ConfirmDialog
         open={approveConfirm}
         onOpenChange={setApproveConfirm}
-        title={`Approve payroll for ${month}?`}
-        description={`This confirms payroll figures for ${employees.length} employees are ready for final lock and disbursement.`}
+        title={`Approve batch ${approveTarget?.batchNumber??1} for ${month}?`}
+        description={`Approve only the ${approveTarget?.count??0} calculated employees shown in batch ${approveTarget?.batchNumber??1}. Other employees and other batches are unaffected. Approval is followed by a separate lock step.`}
         confirmLabel="Approve Payroll"
         loading={busy === "approve"}
         onConfirm={handleApprove}
@@ -430,7 +434,7 @@ function PayrollRunPagePeriodContent({month,onMonthChange}:{month:string;onMonth
         open={lockConfirm}
         onOpenChange={setLockConfirm}
         title="Lock approved payroll?"
-        description={`Once locked, payroll for ${month} cannot be edited without an explicit unlock. Payslips and disbursement can proceed after this.`}
+        description={`Lock only the ${lockTarget?.count??0} employees shown in batch ${lockTarget?.batchNumber??1} for ${month}. Other employees remain unaffected. Use Edit this batch for changes before publication, accounting or payments; protected history uses the correction workflow.`}
         confirmLabel="Lock payroll"
         destructive
         loading={busy === "lock"}

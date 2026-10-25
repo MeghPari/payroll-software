@@ -43,12 +43,13 @@ export function attendanceEmployeeDraft(row:AttendanceImportRow){
  return{employeeCode:row.employeeId,employeeName:name,joiningDate,designation:row.designation??'Other',counterCode:row.counterCode??'',counterName:row.counterName??'',workLocation:row.location??'',state:row.state??'',department:row.department??''};
 }
 export async function validateAttendanceImport(rows:AttendanceImportRow[],month:string):Promise<ImportRowResult<AttendanceImportRow>[]> {
- const[employees,existing,finalized]=await Promise.all([getEmployees(),records('month='+monthKey(month)),isAttendanceFinalized(month)]),seen=new Set(existing.map(r=>r.employeeId+'/'+r.date)),drafts=new Map<string,string>();
+ const[employees,existing,scope]=await Promise.all([getEmployees(),records('month='+monthKey(month)),tenantApi<{finalized_at:string|null;hasPayroll?:boolean;protectedEmployees?:string[]}|null>('attendance/period?month='+monthKey(month)+'&importScope=true')]),seen=new Set(existing.map(r=>r.employeeId+'/'+r.date)),drafts=new Map<string,string>();
  return rows.map((input,index)=>{
   const normalized=normalizeAttendanceImportDate(input.date),data={...input,status:normalizeAttendanceStatus(input.status),date:normalized??input.date},issues:string[]=[],employee=employees.find(e=>e.employeeCode===data.employeeId||e.id===data.employeeId);
   if(!employee){try{const draft=attendanceEmployeeDraft(data),signature=JSON.stringify(draft),previous=drafts.get(data.employeeId);if(previous&&previous!==signature)issues.push('Conflicting name, joining date or details for this new employee.');drafts.set(data.employeeId,signature);if(normalized&&draft.joiningDate>normalized)issues.push('Attendance precedes the new employee joining date.');}catch(error){issues.push(error instanceof Error?error.message:'Invalid new employee details.');}}
   if(employee&&input.employeeName&&input.employeeName.trim().replace(/\s+/g,' ').toLowerCase()!==employee.fullName.trim().replace(/\s+/g,' ').toLowerCase())issues.push('Employee name does not match the employee code in this company.');
-  if(finalized)issues.push('This month is finalized. Reopen it through attendance review before importing.');
+  if(scope?.finalized_at&&!scope.hasPayroll)issues.push('This month is finalized. Reopen it through attendance review before importing.');
+  if(employee&&scope?.protectedEmployees?.includes(employee.id))issues.push('Attendance for this employee is already used in calculated payroll. Reopen that batch for editing or use the correction workflow.');
   if(employee&&normalized&&normalized<employee.joiningDate)issues.push(employee.employeeCode+': '+normalized+' is before joining date '+employee.joiningDate+'.');
   if(employee&&normalized&&employee.exitDate&&normalized>employee.exitDate)issues.push(employee.employeeCode+': '+normalized+' is after leaving date '+employee.exitDate+'.');
   if(!normalized)issues.push('Invalid date. Use YYYY-MM-DD or DD-MM-YYYY / DD/MM/YYYY.');else if(!normalized.startsWith(monthKey(month)))issues.push('Date is outside the selected payroll month.');

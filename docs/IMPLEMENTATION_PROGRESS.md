@@ -203,3 +203,9 @@ Apply supabase/upgrade-designation-salaries.sql once after migration 045. This s
 - Preserved approved snapshots, partial payments and excess-payment protection; added payment/accounting batch selectors and monthly aggregated reports.
 - Added monthly attendance payroll status and extended audited month reset to every batch.
 - See docs/INCREMENTAL_PAYROLL.md and supabase/upgrade-incremental-payroll.sql.
+
+## Payroll approval scope and editing - 25 October 2026
+- Corrected the company-wide employee count in approval/lock reviews to use current-batch rows and totals.
+- Approval and locking now carry an explicit run ID and expected version.
+- Added reasoned, confirmed batch reopening with archived preimages, recalculation and existing financial/publication protections.
+- Added a 35-employees / 10-complete-attendance regression. See docs/PAYROLL_BATCH_EDITING.md and supabase/upgrade-payroll-batch-editing.sql.

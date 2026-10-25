@@ -39,6 +39,8 @@ try{
  validation=await validateAttendanceImport([{...upload,date:'2026-07-01'}],'2026-07');assert.match(validation[0].issues.join(' '),/before joining date 2026-09-29/);
  validation=await validateAttendanceImport([{...upload,date:'2026-10-01'}],'2026-10');assert.match(validation[0].issues.join(' '),/after leaving date 2026-09-30/);
  fixture.period={finalized_at:'2026-10-01'};validation=await validateAttendanceImport([upload],'2026-09');assert.match(validation[0].issues.join(' '),/month is finalized/);fixture.period=null;
+ fixture.period={finalized_at:'2026-10-01',hasPayroll:true,protectedEmployees:[]};validation=await validateAttendanceImport([upload],'2026-09');assert.equal(validation[0].status,'Valid');fixture.period.protectedEmployees=['employee'];validation=await validateAttendanceImport([upload],'2026-09');assert.match(validation[0].issues.join(' '),/already used in calculated payroll/);fixture.period=null;
+ console.log('PASS finalized month imports remain open for pending employees and protect only calculated employees.');
  validation=await validateAttendanceImport([{...upload,checkIn:'29:00'}],'2026-09');assert.equal(validation[0].status,'Error');
  validation=await validateAttendanceImport([{...upload,date:'05-10-2026'}],'2026-09');assert.match(validation[0].issues.join(' '),/outside the selected/);
  validation=await validateAttendanceImport([{...upload,date:'31-02-2026'}],'2026-09');assert.match(validation[0].issues.join(' '),/Invalid date/);
