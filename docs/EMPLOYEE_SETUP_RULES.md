@@ -4,6 +4,7 @@ Employees → Salary supports direct entry with the same fields as the Employee
 Database: Structured Basic, S. DA, S. HRA, S. Other Allowance, calculated S. Gross,
 and optional S. PF/S. ESI/Total CTC reference amounts. Manual and uploaded salaries
 use the same four-component payroll resolver; designation defaults remain disabled.
+Saved salary fields are read-only. Revise salary explicitly opens a draft, requires a later effective date, and shows an old/new gross confirmation before saving. Cancel revision restores the saved values. Initial salary entry also requires confirmation.
 Core amounts are monthly INR values converted to exact paise. PF/ESI/CTC reference
 values do not change deduction applicability or invent contribution rates.
 
