@@ -6,7 +6,7 @@ import {Button} from '@/components/ui/button';
 import {downloadCSV} from '@/lib/csv';
 import {readImportSheet,readImportRecords} from '@/lib/spreadsheet-import';
 import {parseCSVMatrix} from '@/domain/csv';
-import {clientAttendanceRows,clientAttendanceTemplate,type AttendanceCodePolicy} from '@/domain/client-attendance';
+import {clientAttendanceRows,clientAttendanceTemplate,isClientAttendanceGrid,type AttendanceCodePolicy} from '@/domain/client-attendance';
 
 import { BulkUploadDialog, type PreviewColumn } from "@/components/shared/bulk-upload-dialog";
 import { Label } from "@/components/ui/label";
@@ -68,7 +68,7 @@ export function BulkUploadAttendanceDialog({ open, onOpenChange, onImported }: B
       templateColumns={['Employee Code','Employee Name','Counter Code','Counter Name','Location','State','Function','Daily attendance dates','Present','WFH','Half Day','Leave','Absent']}
       sampleRows={[]}
       parseRow={parseRow}
-      parseFile={async file=>{if(file.size>2000000)throw new Error('Import files must be under 2 MB.');const matrix=/\.xlsx$/i.test(file.name)?await readImportSheet(file):parseCSVMatrix(await file.text());if(matrix[0]?.[0]==='Employee Code'&&matrix[0]?.[1]==='Employee Name'&&matrix[0]?.[2]==='Counter Code')return clientAttendanceRows(matrix,monthKeyFromLabel(month),{leave,holiday}).map(row=>({...row,joiningDate:row.joiningDate||joiningDate,designation:row.designation||designation,department:row.department||department}));return(await readImportRecords(file)).map(parseRow).map(row=>({...row,joiningDate:row.joiningDate||joiningDate,designation:row.designation||designation,department:row.department||department}));}}
+      parseFile={async file=>{if(file.size>2000000)throw new Error('Import files must be under 2 MB.');const matrix=/\.xlsx$/i.test(file.name)?await readImportSheet(file):parseCSVMatrix(await file.text());if(isClientAttendanceGrid(matrix))return clientAttendanceRows(matrix,monthKeyFromLabel(month),{leave,holiday}).map(row=>({...row,joiningDate:row.joiningDate||joiningDate,designation:row.designation||designation,department:row.department||department}));return(await readImportRecords(file)).map(parseRow).map(row=>({...row,joiningDate:row.joiningDate||joiningDate,designation:row.designation||designation,department:row.department||department}));}}
       validateRows={rows=>validateAttendanceImport(rows,monthKeyFromLabel(month))}
       previewColumns={previewColumns}
       onImport={async (rows) => {

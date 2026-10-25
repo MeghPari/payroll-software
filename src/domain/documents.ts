@@ -1,4 +1,5 @@
 export const DOCUMENT_TYPES=['PAN Card','Aadhaar','Cancelled Cheque','Bank Proof','Offer Letter','Other Document'] as const;
+export const REQUIRED_KYC_DOCUMENT='Aadhaar' as const;
 export const DOCUMENT_LIMIT=10*1024*1024;
 export interface EmployeeDocument{id:string;employee_id:string;document_type:typeof DOCUMENT_TYPES[number];original_name:string;mime_type:string;byte_size:number;sha256:string;status:'Uploading'|'Pending Verification'|'Verified'|'Rejected'|'Removed';version:number;uploaded_at:string;review_reason:string}
 export function documentFormat(bytes:Uint8Array){

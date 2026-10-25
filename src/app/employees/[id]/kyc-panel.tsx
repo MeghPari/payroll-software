@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from 'next/link';
 import { SectionCard } from "@/components/shared/section-card";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
@@ -60,11 +61,12 @@ export function KYCPanel({ employee, kyc, onChanged }: KYCPanelProps) {
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <SectionCard title={kyc.kycComplete?'KYC complete':'Aadhaar card required to complete KYC'} className="lg:col-span-2"><p className="text-sm">Upload and verify the Aadhaar card in Documents. PAN, bank proof and other documents are optional for KYC completion.</p><Link href={'/employees/'+employee.id+'?tab=documents'} className="mt-2 inline-block text-primary underline">Upload / review Aadhaar card</Link></SectionCard>
       <IdentityEditor key={employee.id+'-'+employee.version} employee={employee} onSaved={onChanged}/>
       <SectionCard title="Identity Details">
         <div className="space-y-4">
           <VerifiableField label="PAN Number" value={employee.statutory.pan} status={kyc.panStatus} onVerify={() => patch("panStatus", "Verified", "PAN status")} />
-          <VerifiableField label="Aadhaar Number" value={employee.statutory.aadhaar} status={kyc.aadhaarStatus} onVerify={() => patch("aadhaarStatus", "Verified", "Aadhaar status")} />
+          <Field label="Aadhaar Number" value={employee.statutory.aadhaar||'Not provided'} /><p className="text-xs">Aadhaar card: {kyc.aadhaarStatus}. Verification is completed through Documents.</p>
           <Field label="Date of Birth" value={employee.dateOfBirth} />
         </div>
       </SectionCard>

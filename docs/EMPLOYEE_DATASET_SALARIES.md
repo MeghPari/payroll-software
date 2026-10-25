@@ -1,5 +1,11 @@
 # Employee dataset salaries
 
+**Updated 25 October 2026:** manual salary entry is also supported under
+Employees → Salary. Optional import fields and salary-less profiles are accepted;
+Basic is required only when salary is supplied, and blank allowances default to
+zero. These rules supersede the earlier upload-only requirements below. See
+EMPLOYEE_SETUP_RULES.md for the current policy and upgrade.
+
 Upload Employee Dataset (CSV or XLSX with the existing Employee Database
 headers), upload attendance for the payroll month, finalize attendance, then
 calculate salaries. The entry points are Employees → Bulk Upload and Employee

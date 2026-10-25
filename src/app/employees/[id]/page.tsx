@@ -162,7 +162,7 @@ function EmployeeProfileContent() {
           {employee && kyc && <KYCPanel employee={employee} kyc={kyc} onChanged={load} />}
         </TabsContent>
         <TabsContent value="documents" className="mt-4">
-          {employee && <DocumentsPanel employee={employee}/>}
+          {employee && <DocumentsPanel onChanged={load} employee={employee}/>}
         </TabsContent>
         <TabsContent value="history" className="mt-4">
           {employee && <PayrollHistoryPanel employee={employee} />}

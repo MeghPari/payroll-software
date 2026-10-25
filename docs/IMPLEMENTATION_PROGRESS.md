@@ -1,5 +1,19 @@
 # Implementation progress - 14 October 2026
 
+## 25 October 2026 - Manual salary, flexible imports and Aadhaar KYC
+
+Employee Salary now accepts direct entry using the same four earnings components
+and three optional reference values as Employee Database. Both entry methods
+feed the same resolver, with dated revisions and stale-version protection.
+Imports accept absent optional metadata and salary-less profiles. Basic remains
+required if salary is supplied; missing allowances default to zero. Existing
+optional values are retained on partial updates. Attendance grids can omit
+optional metadata/summary columns without changing the original template.
+KYC completion is derived from a verified Aadhaar card; other documents are
+optional. See docs/EMPLOYEE_SETUP_RULES.md for critical-field definitions.
+Apply supabase/upgrade-manual-salary-imports-kyc.sql after the month-reset upgrade.
+Live application and signed-in visual acceptance remain pending.
+
 ## 22 October 2026 - Full month reset after payroll
 
 Supersedes the approval/payment block described below. Clear attendance now warns

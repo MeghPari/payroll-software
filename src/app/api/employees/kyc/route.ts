@@ -1,7 +1,7 @@
 import{z}from 'zod';import{tenant}from '@/server/auth';import{body,databaseError,endpoint,result}from '@/server/http';
 export const GET=endpoint(async request=>{
  const{client,companyId}=await tenant(request,'employees.sensitive');const id=z.string().uuid().parse(new URL(request.url).searchParams.get('employeeId'));
- const response=await client.from('employee_statutory_details').select('employee_id,pf_applicable,esi_applicable,pt_applicable,tds_applicable,pan_status,bank_status,tax_regime,declaration_status').eq('company_id',companyId).eq('employee_id',id).maybeSingle();databaseError(response.error);return result(response.data);
+ const[response,requirements]=await Promise.all([client.from('employee_statutory_details').select('employee_id,pf_applicable,esi_applicable,pt_applicable,tds_applicable,pan_status,bank_status,tax_regime,declaration_status').eq('company_id',companyId).eq('employee_id',id).maybeSingle(),client.rpc('employee_kyc_requirements',{c:companyId,e:id})]);databaseError(response.error);databaseError(requirements.error);return result({...response.data,requirements:requirements.data});
 });
 export const POST=endpoint(async request=>{
  const{client,companyId}=await tenant(request,'employees.sensitive');const verification=z.enum(['Verified','Pending Verification','Rejected','Not Provided']);

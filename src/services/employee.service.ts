@@ -74,8 +74,8 @@ export async function validateEmployeeImport(rows:EmployeeImportRow[]):Promise<I
  return rows.map((data,index)=>{const issues:string[]=[];
   if(!/^[A-Za-z0-9_-]{1,40}$/.test(data.employeeId))issues.push('Valid employee code is required.');
   if(seen.has(data.employeeId))issues.push('Duplicate employee code.');seen.add(data.employeeId);
-  if(!data.firstName.trim()||!data.lastName.trim())issues.push('First and last name required.');
-  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.officialEmail))issues.push('Valid email required.');
+  if(!data.firstName.trim())issues.push('First name required.');
+  if(data.officialEmail&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.officialEmail))issues.push('Invalid email. Leave blank if unavailable.');
   if(!/^\d{4}-\d{2}-\d{2}$/.test(data.dateOfJoining)||Number.isNaN(Date.parse(data.dateOfJoining)))issues.push('Valid joining date required.');
   if(data.pan&&!/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(data.pan))issues.push('Invalid PAN.');
   if(data.uan&&(!/^[0-9]{12}$/.test(data.uan)||uans.has(data.uan)))issues.push('Invalid or duplicate UAN.');if(data.uan)uans.add(data.uan);

@@ -61,6 +61,7 @@ export interface EmployeeStatutoryProfile {
 }
 
 export interface EmployeeKYC extends EmployeeStatutoryProfile {
+  kycComplete?:boolean;
   applicabilityConfigured?: Partial<Record<'pfApplicable'|'esiApplicable'|'ptApplicable'|'tdsApplicable',boolean>>;
   taxRegimeConfigured?: boolean;
   employeeId: string;

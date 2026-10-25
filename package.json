@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "node scripts/test-domain.mjs && node scripts/test-database.mjs && node scripts/test-attendance-api.mjs && node scripts/test-request-limits.mjs && node scripts/test-provider-errors.mjs && node scripts/test-payroll-views.mjs && node scripts/test-payroll-illustration.mjs && node scripts/test-client-review.mjs && node scripts/test-client-upgrade-format.mjs && node scripts/test-client-templates.mjs && node scripts/test-employee-dataset.mjs && node scripts/test-employee-dataset.mjs --after-rollback && node scripts/test-clear-attendance.mjs && node scripts/test-clear-attendance.mjs --after-rollback && node scripts/test-month-reset.mjs",
+    "test": "node scripts/test-domain.mjs && node scripts/test-database.mjs && node scripts/test-attendance-api.mjs && node scripts/test-request-limits.mjs && node scripts/test-provider-errors.mjs && node scripts/test-payroll-views.mjs && node scripts/test-payroll-illustration.mjs && node scripts/test-client-review.mjs && node scripts/test-client-upgrade-format.mjs && node scripts/test-client-templates.mjs && node scripts/test-employee-dataset.mjs && node scripts/test-employee-dataset.mjs --after-rollback && node scripts/test-clear-attendance.mjs && node scripts/test-clear-attendance.mjs --after-rollback && node scripts/test-month-reset.mjs && node scripts/test-flexible-employee-setup.mjs",
     "test:attendance-api": "node scripts/test-attendance-api.mjs",
     "test:database": "node scripts/test-database.mjs"
   },

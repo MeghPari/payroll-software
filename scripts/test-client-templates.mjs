@@ -33,9 +33,21 @@ console.log('PASS client templates: Excel/day-first dates, monthly code mappings
 
 const{parseEmployeeDataset}=await import(new URL('employee.mjs',out));
 assert.equal(parseEmployeeDataset({record,salaryEffectiveFrom:'joining'}).amounts.basic,1000000);
-assert.throws(()=>parseEmployeeDataset({record:{...record,'S. DA':''},salaryEffectiveFrom:'joining'}),/S. DA is required/);
+assert.equal(parseEmployeeDataset({record:{...record,'S. DA':'','S. Gross':'14000'},salaryEffectiveFrom:'joining'}).amounts.da,0);
+assert.throws(()=>parseEmployeeDataset({record:{...record,'Structured Basic':''},salaryEffectiveFrom:'joining'}),/Structured Basic is required/);
 assert.equal(parseEmployeeDataset({record:{...record,'S. DA':'0','S. Gross':'14000'},salaryEffectiveFrom:'joining'}).amounts.da,0);
 console.log('PASS employee dataset requires explicit components, accepts zero and retains exact paise.');
+const{isClientAttendanceGrid}=await import(new URL('attendance.mjs',out));
+const slim=[['Employee Code','Thu','Fri'],['','2026-10-01','2026-10-02'],['CL1','P','A']];
+assert.equal(isClientAttendanceGrid(slim),true);
+assert.equal(clientAttendanceRows(slim,'2026-10',{}).length,2);
+assert.equal(clientAttendanceRows(slim,'2026-10',{})[0].employeeName,'');
+assert.equal(isClientAttendanceGrid([['Employee Code','Date','Status'],['CL1','2026-10-01','P']]),false);
+assert.throws(()=>clientAttendanceRows([['Thu'],['2026-10-01'],['P']],'2026-10',{}),/Employee Code/);
+const profileOnly={'Employee Code':'NEW','Employee Name':'New Person','Date of Joining (DOJ)':'2026-10-01'};
+assert.equal(parseEmployeeDataset({record:profileOnly,salaryEffectiveFrom:'joining'}).amounts,null);
+assert.throws(()=>parseEmployeeDataset({record:{...profileOnly,'Date of Joining (DOJ)':''},salaryEffectiveFrom:'joining'}));
+console.log('PASS optional employee metadata and salary, slim attendance grid with omitted metadata/summary, critical code/date checks and long-format detection.');
 
 await compile('src/domain/dates.ts','month-dates.mjs');await compile('src/domain/salary-structure-month.ts','structure-month.mjs',{'./dates':'./month-dates.mjs'});
 const{salaryStructureMonth,structureDisplayName}=await import(new URL('structure-month.mjs',out));
