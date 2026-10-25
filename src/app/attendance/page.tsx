@@ -324,6 +324,7 @@ function AttendanceRegisterPeriod({employees,loading:employeesLoading,month,setM
   const [markOpen, setMarkOpen] = useState(false);
   const [reviewEmployee,setReviewEmployee]=useState<Employee|null>(null),[onlyMissing,setOnlyMissing]=useState(false),[allColumns,setAllColumns]=useState(false);
 
+  const [payrollStatuses,setPayrollStatuses]=useState<Record<string,string>>({});
   const [rows, setRows] = useState<MonthlyRegisterRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [finalized, setFinalized] = useState(false);
@@ -336,8 +337,8 @@ function AttendanceRegisterPeriod({employees,loading:employeesLoading,month,setM
 
   function refresh() {
     setLoading(true);
-    Promise.all([getMonthlyAttendanceRegister(monthKey,employees), isAttendanceFinalized(monthKey)]).then(([r, f]) => {
-      setRows(r);
+    Promise.all([getMonthlyAttendanceRegister(monthKey,employees), isAttendanceFinalized(monthKey),tenantApi<{employeeId:string;status:string;batchNumber:number}[]>(`attendance/payroll-status?month=${monthKey}-01`)]).then(([r, f, statuses]) => {
+      setRows(r);setPayrollStatuses(Object.fromEntries(statuses.map(row=>[row.employeeId,`Batch ${row.batchNumber}: ${row.status}`])));
       setFinalized(f);
       setLoading(false);
     }).catch(error=>{setLoading(false);toast.error(error.message);});
@@ -380,6 +381,7 @@ function AttendanceRegisterPeriod({employees,loading:employeesLoading,month,setM
           "â€”"
         ),
     },
+    {id:'payrollStatus',header:'Payroll',accessorFn:row=>payrollStatuses[row.employeeId]??'Pending',cell:({row})=><StatusBadge status={payrollStatuses[row.original.employeeId]??'Pending'}/>},
     {id:'missing',header:'Dates to review',accessorFn:row=>row.reviewMissing,cell:({row})=><span className={row.original.reviewMissing?'font-semibold text-amber-700':'text-green-700'}>{row.original.reviewDays?(row.original.reviewMissing||'Up to date'):'No past dates'}</span>},
     {id:'review',header:'Review / edit',cell:({row})=><Button variant="outline" size="sm" disabled={!row.original.employee} onClick={()=>setReviewEmployee(row.original.employee??null)}>View dates</Button>},
     { id: "present", header: "Present", accessorFn: (row) => row.summary.present },
@@ -409,7 +411,7 @@ function AttendanceRegisterPeriod({employees,loading:employeesLoading,month,setM
               {finalized ? "Attendance Locked for Payroll" : "Attendance is open for edits"}
             </p>
             <p className="text-xs text-foreground/70">
-              {finalized ? `Attendance for ${month} has been finalized and is ready for payroll processing.` : `Finalize attendance once all records for ${month} have been reviewed.`}
+              {finalized ? `Attendance for ${month} has been finalized and is ready for payroll processing.` : `Each employee with full-month attendance can be calculated. Whole-month finalization is optional.`}
             </p>
           </div>
         </div>
@@ -424,8 +426,8 @@ function AttendanceRegisterPeriod({employees,loading:employeesLoading,month,setM
         </Button>
       </div>
 
-      <section className="mb-4 rounded-xl border bg-card p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">{month}: attendance review</h2><p className="mt-1 text-sm text-muted-foreground">{loadingAll?'Loading the monthly register...':rows.length?rows.filter(row=>row.reviewMissing>0).length+' employee(s) have past dates to review.':'No eligible employees in this month.'} Today and future dates are excluded from review. Full-month records are required for finalization.</p></div><Button variant="outline" onClick={()=>setOnlyMissing(value=>!value)} aria-pressed={onlyMissing}>{onlyMissing?'Show everyone':'Show incomplete attendance'}</Button></div><div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">{[['Employees',rows.length],['Up to date',rows.filter(row=>row.reviewDays>0&&!row.reviewMissing).length],['Payable days',rows.reduce((n,row)=>n+row.summary.payableDays,0)],['Loss-of-pay days',rows.reduce((n,row)=>n+row.summary.lopDays,0)]].map(([label,value])=><div key={label}><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 text-xl font-semibold">{loadingAll?'--':value}</p></div>)}</div>{finalized&&permitted('payroll.run')&&<Link href="/payroll" className="mt-4 inline-block text-sm font-semibold text-primary">Attendance ready. Continue to calculate salaries</Link>}</section>
-      {reviewEmployee&&<MonthlyAttendanceEditor key={reviewEmployee.id+monthKey} employee={reviewEmployee} month={monthKey} finalized={finalized} onClose={()=>setReviewEmployee(null)} onSaved={refresh}/>}
+      <section className="mb-4 rounded-xl border bg-card p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">{month}: attendance review</h2><p className="mt-1 text-sm text-muted-foreground">{loadingAll?'Loading the monthly register...':rows.length?rows.filter(row=>row.reviewMissing>0).length+' employee(s) have past dates to review.':'No eligible employees in this month.'} Today and future dates are excluded from review. Full-month records are required for finalization.</p></div><Button variant="outline" onClick={()=>setOnlyMissing(value=>!value)} aria-pressed={onlyMissing}>{onlyMissing?'Show everyone':'Show incomplete attendance'}</Button></div><div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">{[['Employees',rows.length],['Up to date',rows.filter(row=>row.reviewDays>0&&!row.reviewMissing).length],['Payable days',rows.reduce((n,row)=>n+row.summary.payableDays,0)],['Loss-of-pay days',rows.reduce((n,row)=>n+row.summary.lopDays,0)]].map(([label,value])=><div key={label}><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 text-xl font-semibold">{loadingAll?'--':value}</p></div>)}</div>{permitted('payroll.run')&&<Link href="/payroll" className="mt-4 inline-block text-sm font-semibold text-primary">Calculate employees with complete attendance</Link>}</section>
+      {reviewEmployee&&<MonthlyAttendanceEditor key={reviewEmployee.id+monthKey} employee={reviewEmployee} month={monthKey} finalized={!!payrollStatuses[reviewEmployee.id]||(finalized&&!Object.keys(payrollStatuses).length)} onClose={()=>setReviewEmployee(null)} onSaved={refresh}/>}
       {finalizationIssue?.month === monthKey && !finalized && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-danger">{finalizationIssue.message}</p>}
       <SectionCard
         title="Monthly Attendance Register"
@@ -433,7 +435,7 @@ function AttendanceRegisterPeriod({employees,loading:employeesLoading,month,setM
         actions={<div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" onClick={()=>setAllColumns(value=>!value)} aria-pressed={allColumns}>{allColumns?'Simple view':'All attendance columns'}</Button><Button variant="outline" disabled={finalized || !permitted('attendance.write')} onClick={()=>setMarkOpen(true)}>Mark multiple dates</Button><FilterSelect value={month} onChange={setMonth} options={payrollMonths} className="w-44 bg-white" /></div>}
         noPadding
       >
-        <DataTable columns={allColumns?columns:columns.filter(column=>['employee','missing','review','present','payableDays','lopDays'].includes(column.id??''))} data={onlyMissing?data.filter(row=>row.reviewMissing>0):data} loading={loadingAll} pageSize={10} />
+        <DataTable columns={allColumns?columns:columns.filter(column=>['employee','payrollStatus','missing','review','present','payableDays','lopDays'].includes(column.id??''))} data={onlyMissing?data.filter(row=>row.reviewMissing>0):data} loading={loadingAll} pageSize={10} />
       </SectionCard>
       {!finalized&&permitted('attendance.write')&&<Button variant="outline" disabled={loading||finalizing} onClick={async()=>{try{const result=await tenantApi<{affected:number}>('attendance/calendar',{method:'POST',body:JSON.stringify({kind:'apply',month:monthKey+'-01'})});toast.success('Created '+result.affected+' missing nonworking-day records');refresh();}catch(error){toast.error(error instanceof Error?error.message:'Unable to apply reviewed calendar.');}}}>Apply Reviewed Weekly Offs / Holidays</Button>}
       <MarkEditAttendanceDialog open={markOpen} onOpenChange={setMarkOpen} employees={employees.filter(employee=>!['Inactive','Salary Hold'].includes(employee.status)&&employee.joiningDate<=`${monthKey}-31`&&(!employee.exitDate||employee.exitDate>=`${monthKey}-01`))} date={`${monthKey}-01`} allowDateRange onDone={refresh} />

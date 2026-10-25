@@ -9,7 +9,9 @@ const month=z.string().regex(/^\d{4}-(0[1-9]|1[0-2])-01$/);
 export const GET=endpoint(async request=>{
  const {client,companyId}=await tenant(request,'disbursements.write');const params=new URL(request.url).searchParams;
  const m=month.parse(params.get('month')),exporting=params.get('export')==='csv';
- const response=await client.rpc('disbursement_batch',{c:companyId,m,include_bank_details:exporting});databaseError(response.error);
+ if(params.get('list')==='true'){const list=await client.rpc('list_month_payment_batches',{c:companyId,m});databaseError(list.error);return result(list.data);}
+ const selected=params.has('batchId')?z.string().uuid().parse(params.get('batchId')):null;
+ const response=selected?await client.rpc('disbursement_batch_by_id',{c:companyId,selected_batch:selected,include_bank_details:exporting}):await client.rpc('disbursement_batch',{c:companyId,m,include_bank_details:exporting});databaseError(response.error);
  if(!exporting)return result(response.data as DisbursementBatch|null);
  const batch=response.data as DisbursementBatch|null;if(!batch)throw new ApiError(422,'INSTRUCTIONS_NOT_PREPARED','Prepare payment instructions for this month before exporting.');
  let retry: {id:string;employeeId:string;amountMinor:number}|undefined;
@@ -21,10 +23,10 @@ export const GET=endpoint(async request=>{
 export const POST=endpoint(async request=>{
  const {client,companyId}=await tenant(request,'disbursements.write');
  const input=await body(request,z.discriminatedUnion('action',[
-  z.object({action:z.literal('prepare'),month,bankId:z.string().uuid()}).strict(),
+  z.object({action:z.literal('prepare'),month,runId:z.string().uuid().optional(),bankId:z.string().uuid()}).strict(),
   z.object({action:z.literal('record'),batchId:z.string().uuid(),employeeId:z.string().uuid(),amountMinor:z.number().int().positive().max(9000000000000),date:invoiceDate,reference:z.string().trim().min(1).max(160),evidence:z.string().trim().min(1).max(1000)}).strict(),
   z.object({action:z.literal('cancel'),batchId:z.string().uuid(),reason:z.string().trim().min(1).max(1000)}).strict(),
  ]));
- const response=input.action==='prepare'?await client.rpc('prepare_disbursement',{c:companyId,m:input.month,b:input.bankId}):input.action==='cancel'?await client.rpc('cancel_disbursement',{c:companyId,b:input.batchId,reason_text:input.reason}):await client.rpc('record_salary_payment',{c:companyId,batch_id:input.batchId,e:input.employeeId,amount:input.amountMinor,payment_date:input.date,reference_text:input.reference,evidence:input.evidence});
+ const response=input.action==='prepare'?input.runId?await client.rpc('prepare_disbursement_for_run',{c:companyId,selected_run:input.runId,b:input.bankId}):await client.rpc('prepare_disbursement',{c:companyId,m:input.month,b:input.bankId}):input.action==='cancel'?await client.rpc('cancel_disbursement',{c:companyId,b:input.batchId,reason_text:input.reason}):await client.rpc('record_salary_payment',{c:companyId,batch_id:input.batchId,e:input.employeeId,amount:input.amountMinor,payment_date:input.date,reference_text:input.reference,evidence:input.evidence});
  financeError(response.error);return result({id:response.data,saved:true});
 });

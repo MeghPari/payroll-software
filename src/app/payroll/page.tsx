@@ -64,7 +64,7 @@ const AdjustmentsPanel=dynamic(()=>import('@/components/payroll/adjustments-pane
 const SalaryCalculationDrawer=dynamic(()=>import('@/components/shared/salary-calculation-drawer').then(module=>module.SalaryCalculationDrawer),{loading:()=> <p role="status" className="p-4 text-sm text-muted-foreground">Loading...</p>});
 
 function buildSteps(period: PayrollPeriod | null): PayrollStep[] {
- const flags=[!!period?.attendanceFinalized,!!period?.validated,period?.status==='Locked',!!period?.disbursed];
+ const flags=[!!period?.attendanceFinalized||!!period?.validated,!!period?.validated,period?.status==='Locked',!!period?.disbursed];
  const active=flags.findIndex(value=>!value);
  return ['Attendance','Calculate salaries','Review & lock','Salary payments'].map((label,index)=>({id:index+1,label,status:flags[index]?'completed':index===active?'in-progress':'pending'}));
 }
@@ -134,8 +134,9 @@ function PayrollRunPagePeriodContent({month,onMonthChange}:{month:string;onMonth
       const counts={}as Record<PayrollExceptionType,number>;
       for(const issue of checks.issues.filter(issue=>issue.severity!=='Passed'))counts[issue.check as PayrollExceptionType]=(counts[issue.check as PayrollExceptionType]??0)+1;
       setExceptions(counts);
+      if(checks.readyCount===0){toast.info('No new employees are ready. Complete attendance and salary setup for pending employees.');return;}
       if(checks.blockingErrors){const first=checks.issues.find(issue=>issue.severity==='Blocking Error');toast.error(first?.message??'Review the payroll issues shown below.');return;}
-      await payrollAction(monthKey,'calculate');await refresh(false);toast.success('Salaries calculated. Review each employee below.');
+      await payrollAction(monthKey,'calculate');await refresh(false);toast.success('Ready employees calculated. Previously calculated salaries and payments are retained.');
     }
     catch(error){toast.error(error instanceof Error?error.message:'Calculation failed.');}
     finally{setBusy(null);}
@@ -225,7 +226,7 @@ function PayrollRunPagePeriodContent({month,onMonthChange}:{month:string;onMonth
     { id: "other", header: "Other Deductions", accessorFn: (row) => row.otherDeductions, cell: ({ row }) => formatINR(row.original.otherDeductions) },
     { id: "deductions", header: "Deductions", accessorFn: (row) => row.totalDeductions, cell: ({row})=>formatINR(row.original.totalDeductions) },
     { id: "net", header: "Net Pay", accessorFn: (row) => row.netPayable, cell: ({ row }) => <span className="font-semibold text-foreground">{formatINR(row.original.netPayable)}</span> },
-    { id: "status", header: "Payroll Status", accessorFn: (row) => row.status, cell: ({ row }) => <StatusBadge status={row.original.status} /> },
+    { id: "status", header: "Payroll Status", accessorFn: (row) => row.payrollStatus??row.status, cell: ({ row }) => <StatusBadge status={row.original.payrollStatus?`Batch ${row.original.payrollBatch}: ${row.original.payrollStatus}`:row.original.status} /> },
   ];
 
   return (
@@ -272,15 +273,15 @@ function PayrollRunPagePeriodContent({month,onMonthChange}:{month:string;onMonth
       <PayrollSetupNotice warnings={rows.flatMap(row=>row.setupWarnings??[])} showEmployeeLinks/>
       {rows.length>0&&<PayrollComparison month={monthKey} rows={rows} employees={employees}/>}
       {validation&&<PayrollBlockers issues={validation.issues} employees={employees} onReviewOvertime={()=>{setShowAdjustments(true);requestAnimationFrame(()=>document.getElementById('payroll-adjustments')?.scrollIntoView({behavior:'smooth'}));}}/>}
-      <section className="mb-5 rounded-xl border border-blue-200 bg-blue-50 p-5"><h2 className="font-semibold">{!finalized?'Start with attendance':validation?.blockingErrors?'Complete payroll setup before calculating.':!period?.validated?'Attendance ready. Calculate salaries next.':!period?.approved?'Review the salaries below, then approve.':!isLocked?'Approved. Lock payroll to prepare payment.':'Salaries locked and ready for payment.'}</h2><div className="mt-3 flex flex-wrap gap-2">{!finalized?<Link className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white" href="/attendance">Review monthly attendance</Link>:!period?.approved?<Button disabled={loading||!!busy||!permitted('payroll.run')} onClick={handleCalculate}>{busy==='calculate'?'Calculating...':period?.validated?'Recalculate salaries':'Calculate salaries'}</Button>:!isLocked?<Button disabled={!!busy||!permitted('payroll.lock')} onClick={()=>setLockConfirm(true)}>Lock approved payroll</Button>:permitted('disbursements.write')?<Link href="/disbursement" className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white">Continue to salary payments</Link>:<p className="text-sm">Your finance administrator can prepare salary payments.</p>}</div></section>
+      <section className="mb-5 rounded-xl border border-blue-200 bg-blue-50 p-5"><h2 className="font-semibold">Calculate employees with complete monthly attendance</h2><p className="mt-2 text-sm">Employees with incomplete attendance remain pending. Run again when more employees are ready; earlier salaries and payments are retained. Approve and lock each batch before payment.</p><div className="mt-3 flex flex-wrap gap-2"><Button disabled={loading||!!busy||!permitted('payroll.run')} onClick={handleCalculate}>{busy==='calculate'?'Calculating...':'Calculate ready employees'}</Button><Link className="self-center text-sm font-semibold text-primary" href="/attendance">Review pending attendance</Link>{isLocked&&<Link className="self-center text-sm font-semibold text-primary" href="/disbursement">Salary payments</Link>}</div></section>
       <SectionCard className="mb-5">
         {loading ? <div className="h-24 animate-pulse rounded-lg bg-muted" /> : <PayrollStepper steps={buildSteps(period)} />}
       </SectionCard>
 
       <SectionCard
         className="mb-5"
-        title="Attendance Finalization"
-        subtitle={finalized ? `Attendance for ${month} is finalized and locked for payroll.` : `Finalize attendance for ${month} before running payroll validation.`}
+        title="Employee attendance readiness"
+        subtitle={finalized ? `Attendance for ${month} is finalized and locked for payroll.` : `Whole-month finalization is optional. Each employee needs every employed date marked for ${month}.`}
         actions={
           finalized ? (
             <StatusBadge status="Attendance Locked for Payroll" tone="success" />
@@ -398,13 +399,13 @@ function PayrollRunPagePeriodContent({month,onMonthChange}:{month:string;onMonth
         title="Employee salaries"
         subtitle={`${employees.length} employees · ${month} · Click a row for the full calculation breakdown`}
         actions={
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={handleCalculate} disabled={loading||!!busy||!finalized||isLocked||!!period?.approved||!permitted("payroll.run")}>
-            <RefreshCcw className="h-3.5 w-3.5" /> Calculate / Recalculate
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={handleCalculate} disabled={loading||!!busy||!permitted("payroll.run")}>
+            <RefreshCcw className="h-3.5 w-3.5" /> Calculate ready employees
           </Button>
         }
         noPadding
       >
-        <DataTable columns={showDetails?columns:columns.filter(column=>['employeeName','payableDays','lopDays','adjustedGross','deductions','net','status'].includes(column.id??''))} data={rows} loading={loading} emptyTitle="No calculated salaries yet" emptyDescription="Finalize attendance, then use Calculate salaries above." pageSize={10} onRowClick={(row) => setDrawerEmployee(employeeMap.get(row.employeeId) ?? null)} />
+        <DataTable columns={showDetails?columns:columns.filter(column=>['employeeName','payableDays','lopDays','adjustedGross','deductions','net','status'].includes(column.id??''))} data={rows} loading={loading} emptyTitle="No calculated salaries yet" emptyDescription="Complete attendance for an employee, then calculate ready employees above." pageSize={10} onRowClick={(row) => setDrawerEmployee(employeeMap.get(row.employeeId) ?? null)} />
       </SectionCard>
 
       <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">

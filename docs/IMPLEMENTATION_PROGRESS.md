@@ -197,3 +197,9 @@ Seven editable sample monthly gross presets are available: Associate INR 28,000;
 Attendance P/A aliases now normalize to Present/Absent in preview, API validation and the database. The downloadable Attendance_Template.xlsx is the byte-identical original, with no additional columns. New employees' shared designation/joining date can be supplied in upload settings. Mixed designations can be loaded through Employee Database first, or uploaded separately. The original workbook contains October 2026 dates; update its date-header row for other months, preserving its layout. An optional monthly CSV keeps 31 date slots and the same summary positions.
 
 Apply supabase/upgrade-designation-salaries.sql once after migration 045. This seeds sample preset structures, preserves existing employee pay and financial history, and enables the new functions. It does not import live attendance or initiate payments. Local database tests cover automatic pay, manual overrides, revisions, edited defaults, HR permissions, private-function denial, raw P/A persistence and exact payroll. Live SQL application and signed-in visual acceptance remain separate.
+
+## Incremental employee payroll - 25 October 2026
+- Added repeatable monthly batches, per-employee full-attendance readiness and idempotent employee/month uniqueness.
+- Preserved approved snapshots, partial payments and excess-payment protection; added payment/accounting batch selectors and monthly aggregated reports.
+- Added monthly attendance payroll status and extended audited month reset to every batch.
+- See docs/INCREMENTAL_PAYROLL.md and supabase/upgrade-incremental-payroll.sql.

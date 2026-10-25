@@ -29,11 +29,11 @@ export const GET=endpoint(async request=>{
   if((attendance.data?.length??0)<500)break;
  }
  if(canPayroll){
-  const [runs,checks]=await Promise.all([client.from('payroll_runs').select('id,month,status').eq('company_id',companyId).lte('month',start).order('month',{ascending:false}).limit(6),client.rpc('validate_payroll',{c:companyId,m:start})]);databaseError(runs.error);databaseError(checks.error);
+  const [runs,checks]=await Promise.all([client.from('payroll_runs').select('id,month,status,batch_number').eq('company_id',companyId).lte('month',start).order('month',{ascending:false}).order('batch_number',{ascending:true}).limit(100),client.rpc('validate_payroll',{c:companyId,m:start})]);databaseError(runs.error);databaseError(checks.error);
   const issues=checks.data.issues as {employeeId:string}[];
   data.ops.total=checks.data.totalChecked;data.ops.exceptionCount=issues.length;
   // A period-level issue blocks every employee; otherwise count distinct affected employees.
-  data.ops.eligible=issues.some(issue=>!issue.employeeId)?0:Math.max(0,checks.data.totalChecked-new Set(issues.map(issue=>issue.employeeId)).size);
+  data.ops.eligible=checks.data.readyCount??(issues.some(issue=>!issue.employeeId)?0:Math.max(0,checks.data.totalChecked-new Set(issues.map(issue=>issue.employeeId)).size));
   for(const run of runs.data??[]){
    const gross:number[]=[],deductions:number[]=[],net:number[]=[],employer:number[]=[];
    for(let offset=0;;offset+=500){
@@ -41,8 +41,8 @@ export const GET=endpoint(async request=>{
     for(const row of snapshots.data??[]){gross.push(Number(row.gross_minor));deductions.push(Number(row.deduction_minor));net.push(Number(row.net_minor));employer.push(Number(row.employer_minor));}
     if((snapshots.data?.length??0)<500)break;
    }
-   if(run.status!=='Draft')data.payrollCostHistory.unshift({month:monthLabel(run.month.slice(0,7)),value:sum([...gross,...employer])/100});
-   if(run.month===start){data.kpis.payrollStatus=run.status;if(run.status!=='Draft'){data.kpis.netSalaryPayable=sum(net)/100;data.payrollSummary.grossSalary=sum(gross)/100;data.payrollSummary.deductions=sum(deductions)/100;data.payrollSummary.netSalaryPayable=sum(net)/100;}}
+   if(run.status!=='Draft'){const label=monthLabel(run.month.slice(0,7)),existing=data.payrollCostHistory.find(row=>row.month===label);if(existing)existing.value+=sum([...gross,...employer])/100;else data.payrollCostHistory.unshift({month:label,value:sum([...gross,...employer])/100});}
+   if(run.month===start){data.kpis.payrollStatus=run.status;if(run.status!=='Draft'){data.kpis.netSalaryPayable=(data.kpis.netSalaryPayable??0)+sum(net)/100;data.payrollSummary.grossSalary=(data.payrollSummary.grossSalary??0)+sum(gross)/100;data.payrollSummary.deductions=(data.payrollSummary.deductions??0)+sum(deductions)/100;data.payrollSummary.netSalaryPayable=(data.payrollSummary.netSalaryPayable??0)+sum(net)/100;}}
   }
  }
  if(canAccounts){

@@ -33,13 +33,14 @@ export const GET=endpoint(async request=>{
   const ledgers:ReportAccount[]=accounts.map(account=>({id:account.id,code:account.code,name:account.name,type:(account.account_groups as unknown as {type:string}).type}));
   return result(accountingReport(kind as Parameters<typeof accountingReport>[0],month,ledgers,entries));
  }
- const run=await client.from('payroll_runs').select('id,status,version').eq('company_id',companyId).eq('month',start).maybeSingle();databaseError(run.error);
+ const run=await client.from('payroll_runs').select('id,status,version').eq('company_id',companyId).eq('month',start).order('batch_number',{ascending:false}).limit(1).maybeSingle();databaseError(run.error);
  if(!run.data||run.data.status==='Draft')throw new ApiError(422,'PAYROLL_NOT_CALCULATED','Calculate payroll for the selected month before generating this report.');
+ const monthRuns=await client.from('payroll_runs').select('id,version').eq('company_id',companyId).eq('month',start);databaseError(monthRuns.error);
  const report:ReportTable={title:kind,month,headers:[],rows:[],note:`Saved payroll version ${run.data.version}, status ${run.data.status}. Contribution summaries are review reports; they are not statutory filing files or evidence of payment.`};
  const contribution=kind.endsWith('-summary')?kind.slice(0,-8):null;
  report.headers=contribution?['Employee Code','Employee Name','Employee Contribution INR','Employer Contribution INR']:kind==='salary-cost'?['Employee Code','Employee Name','Gross INR','Employer Contributions INR','Total Cost INR']:['Employee Code','Employee Name','Gross INR','Deductions INR','Net INR'];
  for(let offset=0;;offset+=500){
-  const page=await client.from('payroll_run_employees').select('employee_id,gross_minor,deduction_minor,net_minor,employer_minor,snapshot').eq('company_id',companyId).eq('run_id',run.data.id).order('employee_id').range(offset,offset+499);databaseError(page.error);
+  const page=await client.from('payroll_run_employees').select('employee_id,gross_minor,deduction_minor,net_minor,employer_minor,snapshot').eq('company_id',companyId).in('run_id',(monthRuns.data??[]).map(row=>row.id)).order('employee_id').range(offset,offset+499);databaseError(page.error);
   for(const row of page.data??[]){const snapshot=row.snapshot;const values=contribution?[Number(snapshot.deductions[contribution]??0),Number(snapshot.employer[contribution]??0)]:kind==='salary-cost'?[Number(row.gross_minor),Number(row.employer_minor),Number(row.gross_minor)+Number(row.employer_minor)]:[Number(row.gross_minor),Number(row.deduction_minor),Number(row.net_minor)];report.rows.push([snapshot.employeeCode,snapshot.employeeName,...values.map(decimalMinor)]);}
   if((page.data?.length??0)<500)break;
  }

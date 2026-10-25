@@ -1,0 +1,2 @@
+import {z}from'zod';import{tenant}from'@/server/auth';import{databaseError,endpoint,result}from'@/server/http';
+export const GET=endpoint(async request=>{const{client,companyId}=await tenant(request,'attendance.read');const m=z.string().regex(/^\d{4}-(0[1-9]|1[0-2])-01$/).parse(new URL(request.url).searchParams.get('month'));const response=await client.rpc('month_employee_payroll_status',{c:companyId,m});databaseError(response.error);return result(response.data);});
