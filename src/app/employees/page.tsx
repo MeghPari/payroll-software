@@ -348,7 +348,7 @@ function EmployeesPageContent() {
         />
       </SectionCard>
 
-      <EmployeeDetailDrawer employee={selectedEmployee} open={drawerOpen} onOpenChange={setDrawerOpen} />
+      <EmployeeDetailDrawer employee={selectedEmployee} open={drawerOpen} onOpenChange={setDrawerOpen} canEdit={permitted("employees.write")} onEdit={employee=>{if(!permitted("employees.write")){toast.error("Permission denied.");return;}setEditingEmployee(employee);setAddOpen(true);}} />
       <AddEmployeeDialog employee={editingEmployee} open={addOpen} onOpenChange={setAddOpen} onCreated={() => refresh()} />
       <BulkUploadEmployeesDialog open={bulkUploadOpen} onOpenChange={setBulkUploadOpen} onImported={refresh} />
 
