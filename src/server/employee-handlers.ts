@@ -1,5 +1,6 @@
 import 'server-only';
 import { z } from 'zod';
+import {bankDetailsInput,statutoryIdentifiersInput}from'@/domain/employee-identifiers';
 import { tenant } from './auth';
 import { ApiError, body, databaseError, endpoint, result } from './http';
 
@@ -16,8 +17,8 @@ export const employeeInput = z.object({
   employmentType: z.enum(['Full-time','Part-time','Contractor','Intern']).optional(),
   category: z.enum(['Permanent','Contract','Consultant','Intern','Temporary','Rent Candidate','Other']).optional(),
   counterCode:z.string().max(80).optional(),counterName:z.string().max(160).optional(),
-  bankDetails: z.object({ accountHolderName: z.string().max(160), accountNumber: z.string().regex(/^([0-9]{6,34})?$/), ifscCode: z.string().regex(/^([A-Z]{4}0[A-Z0-9]{6})?$/), bankName: z.string().max(160), branch: z.string().max(160) }).strict().optional(),
-  statutory: z.object({ aadhaar:z.string().regex(/^([0-9]{12})?$/).optional(),pan: z.string().regex(/^([A-Z]{5}[0-9]{4}[A-Z])?$/).optional(), uan: z.string().regex(/^([0-9]{12})?$/).optional(), esicNumber: z.string().max(30).optional() }).strict().optional(),
+  bankDetails: bankDetailsInput.optional(),
+  statutory: statutoryIdentifiersInput.optional(),
 }).strict();
 const selection = 'counter_code,counter_name,client_status,id,employee_code,first_name,last_name,email,phone,department_id,designation_id,status,joining_date,exit_date,work_location,state,category,employment_type,version,departments(name),designations(name)';
 export const listEmployees = endpoint(async request => {

@@ -44,3 +44,6 @@ Apply supabase/upgrade-manual-salary-imports-kyc.sql once after the month-reset
 upgrade. It adds the salary entry RPC and KYC requirement RPC and replaces the
 dataset import function; it does not recalculate or delete existing payroll.
 Tests use local Postgres and fixture Auth/Storage metadata, not live client files.
+
+## Independent bank and identifier saves - 26 October 2026
+Bank details and identity/statutory identifiers have separate save actions. Invalid optional PAN/UAN/Aadhaar drafts do not block a bank-only save. Shared client/server schemas normalize spaces and case and report field-specific format errors; invalid supplied identifiers are still rejected. Blank optional identifiers are accepted. Aadhaar edits are included in the employee update payload instead of being silently omitted. No database migration is required.

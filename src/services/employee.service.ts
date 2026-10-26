@@ -48,7 +48,7 @@ export async function updateEmployee(id:string,data:Partial<Employee>):Promise<E
  const merged={...previous,...data};
  // Only write sensitive objects when the caller explicitly edits them.
  const core=input({...merged,bankDetails:undefined,statutory:undefined});
- const employee={...core,...(data.bankDetails?{bankDetails:data.bankDetails}:{}),...(data.statutory?{statutory:{pan:data.statutory.pan,uan:data.statutory.uan,esicNumber:data.statutory.esicNumber}}:{})};
+ const employee={...core,...(data.bankDetails?{bankDetails:data.bankDetails}:{}),...(data.statutory?{statutory:{aadhaar:data.statutory.aadhaar,pan:data.statutory.pan,uan:data.statutory.uan,esicNumber:data.statutory.esicNumber}}:{})};
  await tenantApi('employees',{method:'POST',body:JSON.stringify({id,expectedVersion:data.version??previous.version,employee})});
  return getEmployeeById(id);
 }
