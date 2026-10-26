@@ -18,7 +18,7 @@ await attendance(0);await attendance(1,30);
 const validate=async()=>(await db.query(`select public.validate_payroll($1,'2026-03-01') data`,[c])).rows[0].data;
 assert.equal((await validate()).readyCount,1);assert.equal((await validate()).blockingErrors,0);
 const calculate=async()=>(await db.query(`select public.calculate_payroll($1,'2026-03-01') id`,[c])).rows[0].id;
-const first=await calculate();assert.equal(Number((await db.query('select count(*) n from public.payroll_run_employees')).rows[0].n),1);assert.equal(await calculate(),first);
+const first=await calculate();const savedSalary=(await db.query('select snapshot from public.payroll_run_employees where run_id=$1',[first])).rows[0].snapshot.salary;assert.ok(savedSalary,'New calculations must capture salary provenance');assert.equal(savedSalary.effectiveFrom,'2026-03-16');assert.equal(savedSalary.amounts.basic,3100000);assert.equal(Number((await db.query('select count(*) n from public.payroll_run_employees')).rows[0].n),1);assert.equal(await calculate(),first);
 const transition=async(action)=>{const v=(await db.query('select version from public.payroll_runs where company_id=$1 order by batch_number desc limit 1',[c])).rows[0].version;await db.query(`select public.transition_payroll($1,'2026-03-01',$2,$3,'')`,[c,action,v]);};
 // Unrelated employee attendance must not invalidate the first batch's approval.
 await db.query(`select public.import_attendance($1,$2::jsonb,'Finish second employee')`,[c,JSON.stringify([{employeeId:employees[1],date:'2026-03-31',status:'A'}])]);

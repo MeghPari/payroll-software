@@ -90,6 +90,7 @@ export function SalaryCalculationDrawer({ employee, month, open, onOpenChange, s
                     <Row label="Gross Before Attendance Reductions" value={formatINR(calc.grossEarnings)} />
                     <Row label="Structure" value={calc.salary.structure} />
                     <Row label="Effective From" value={calc.salary.effectiveFrom} />
+                    {calc.salary.structure==='Salary source unavailable'&&<p role="status" className="text-sm text-amber-800">This saved calculation has no salary-source details. Captured earnings, deductions and net pay are retained. Review the source before approval; use Edit / recalculate this batch to rebuild an unpublished calculation.</p>}
                   </Section>
 
                   <Section title="B. Attendance Summary">

@@ -7,7 +7,10 @@ export {getSalaryStructures,getSalaryStructureById,updateSalaryStructure,createS
 export type PayrollValidationSummary=PayrollChecks & {issues:import('@/types').PayrollValidationIssue[]};
 function calculation(row:PayrollSnapshot,month:string):PayrollCalculation{
  const snapshot=row.snapshot,earn=snapshot.earnings,ded=snapshot.deductions,cost=snapshot.employer;
- const salary={employeeId:row.employee_id,effectiveFrom:snapshot.salary.effectiveFrom,structure:snapshot.salary.structure,...Object.fromEntries(componentCodes.map(code=>[code,(snapshot.salary.amounts[code]??0)/100]))}as SalaryProfile;
+ // Older saved runs can lack salary provenance. Keep their captured monetary
+ // results; never substitute today's salary for a historical calculation.
+ const source=snapshot.salary;
+ const salary={employeeId:row.employee_id,effectiveFrom:source?.effectiveFrom??'Unavailable in saved payroll',structure:source?.structure??'Salary source unavailable',...Object.fromEntries(componentCodes.map(code=>[code,(source?.amounts?.[code]??0)/100]))}as SalaryProfile;
  const d=(code:string)=>(ded[code]??0)/100,c=(code:string)=>(cost[code]??0)/100,e=(code:string)=>(earn[code]??0)/100;
  return{payrollRunId:row.run_id,payrollBatch:row.batchNumber,payrollStatus:row.payrollStatus,setupWarnings:employeeSetupWarnings(snapshot.setupWarnings,row.employee_id),earningsBreakdown:Object.fromEntries(Object.entries(earn).map(([code,value])=>[code,value/100])),deductionBreakdown:Object.fromEntries(Object.entries(ded).map(([code,value])=>[code,value/100])),employeeId:row.employee_id,month,salary,attendance:snapshot.attendance,grossEarnings:snapshot.baselineGrossMinor/100,basic:e('basic'),hra:e('hra'),allowances:e('special')+e('conveyance')+e('other'),variablePay:e('bonus')+e('variable'),lopDeduction:(snapshot.baselineGrossMinor-row.gross_minor)/100,adjustedGross:row.gross_minor/100,pf:d('pf'),esi:d('esi'),pt:d('pt'),tds:d('tds'),otherDeductions:d('loan')+d('advance')+d('otherDeduction')+d('uniformAdvance')+d('vehicleDamage')+d('recovery'),totalDeductions:row.deduction_minor/100,netPayable:row.net_minor/100,employerPF:c('pf'),employerESI:c('esi'),employerOther:c('employerOther'),totalEmployerCost:(row.gross_minor+row.employer_minor)/100,eligibility:'Eligible',status:'Ready'};
 }

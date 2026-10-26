@@ -273,6 +273,7 @@ function PayrollRunPagePeriodContent({month,onMonthChange}:{month:string;onMonth
       {permitted('employees.sensitive')&&permitted('salary.read')&&<div className="mb-4"><Button variant="outline" onClick={()=>setClientSheet(value=>!value)} aria-expanded={clientSheet}>{clientSheet?'Hide client salary sheet':'Client salary sheet'}</Button></div>}
       {clientSheet&&<ClientSalarySheet key={monthKey+period?.version} month={monthKey}/>}
       <PayrollSetupNotice warnings={rows.flatMap(row=>row.setupWarnings??[])} showEmployeeLinks/>
+      {rows.some(row=>row.salary.structure==='Salary source unavailable')&&<p role="status" className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm">Some saved salaries have missing source details. Their captured totals are shown below. Review these employees before approval; Edit / recalculate this batch can rebuild unpublished calculations from reviewed inputs.</p>}
       {rows.length>0&&<PayrollComparison month={monthKey} rows={rows} employees={employees}/>}
       {validation&&<PayrollBlockers issues={validation.issues} employees={employees} onReviewOvertime={()=>{setShowAdjustments(true);requestAnimationFrame(()=>document.getElementById('payroll-adjustments')?.scrollIntoView({behavior:'smooth'}));}}/>}
       <section className="mb-5 rounded-xl border border-blue-200 bg-blue-50 p-5"><h2 className="font-semibold">Calculate employees with complete monthly attendance</h2><p className="mt-2 text-sm">Employees with incomplete attendance remain pending. Run again when more employees are ready; earlier salaries and payments are retained. Approve and lock each batch before payment.</p><div className="mt-3 flex flex-wrap gap-2"><Button disabled={loading||!!busy||!permitted('payroll.run')} onClick={handleCalculate}>{busy==='calculate'?'Calculating...':'Calculate ready employees'}</Button><Link className="self-center text-sm font-semibold text-primary" href="/attendance">Review pending attendance</Link>{isLocked&&<Link className="self-center text-sm font-semibold text-primary" href="/disbursement">Salary payments</Link>}</div></section>
@@ -380,15 +381,15 @@ function PayrollRunPagePeriodContent({month,onMonthChange}:{month:string;onMonth
             ))}
           </div>
         </SectionCard>
-        <SectionCard title="Payroll Exception Center" subtitle="Issues that may block or affect this payroll run">
+        <SectionCard title="Payroll Exception Center" subtitle="Setup issues for pending employees; warnings do not block saved batches">
           {Object.keys(exceptions).length === 0 ? (
             <p className="text-sm text-muted-foreground">{validation ? `No exceptions detected for ${month}.` : 'Run checks to review employee and attendance issues.'}</p>
           ) : (
             <div className="grid grid-cols-2 gap-3">
               {Object.entries(exceptions).map(([type, count]) => (
-                <div key={type} className="flex items-center justify-between rounded-lg border border-rose-200 bg-rose-50 px-3 py-2">
+                <div key={type} className={`flex items-center justify-between rounded-lg border px-3 py-2 ${validation?.issues.some(issue=>issue.check===type&&issue.severity==='Blocking Error')?'border-rose-200 bg-rose-50':'border-amber-200 bg-amber-50'}`}>
                   <span className="text-xs text-foreground">{type}</span>
-                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1.5 text-xs font-semibold text-white">{count}</span>
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-700 px-1.5 text-xs font-semibold text-white">{count}</span>
                 </div>
               ))}
             </div>
