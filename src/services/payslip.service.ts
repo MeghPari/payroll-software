@@ -18,3 +18,14 @@ export async function downloadPayslip(id:string){
  if(!response.ok){const payload=await response.json();throw new Error(payload.error?.message??'Unable to download payslip.');}
  const url=URL.createObjectURL(await response.blob()),link=document.createElement('a');link.href=url;link.download=`payslip-${id}.pdf`;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
+
+export async function getPayslipDashboard(month:string,signal?:AbortSignal){return tenantApi<import('@/domain/payslips-module').PayslipDashboard>(`payslips/dashboard?month=${monthKey(month)}-01`,{signal});}
+export function managePayslips(month:string,action:'generate'|'regenerate'|'publish',ids:string[]){return tenantApi<{count:number}>('payslips/manage',{method:'POST',body:JSON.stringify({month:`${monthKey(month)}-01`,action,ids})});}
+export function emailPayslips(ids:string[],requestKey:string){return tenantApi<{results:{id:string;status:string;message?:string}[]}>('payslips/email',{method:'POST',body:JSON.stringify({ids,requestKey})});}
+export function getPayslipHistory(id:string){return tenantApi<{emails:import('@/domain/payslips-module').PayslipEmailAttempt[];revisions:import('@/domain/payslips-module').PayslipRevision[]}>(`payslips/manage?id=${encodeURIComponent(id)}`);}
+export async function payslipFile(path:string,ids?:string[]){
+ const companyId=useSessionStore.getState().companyId;if(!companyId)throw new Error('Select an authorized company.');
+ const response=await fetch(`/api/payslips/${path}`,{method:ids?'POST':'GET',headers:{'x-company-id':companyId,...(ids?{'Content-Type':'application/json'}:{})},body:ids?JSON.stringify({ids}):undefined,credentials:'same-origin',cache:'no-store'});
+ if(!response.ok){const payload=await response.json();throw new Error(payload.error?.message??'Unable to create payslip download.');}return response.blob();
+}
+export function savePayslipFile(blob:Blob,name:string){const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=name;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}

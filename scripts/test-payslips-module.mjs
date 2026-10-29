@@ -1,0 +1,54 @@
+import {PGlite}from'@electric-sql/pglite';import{readFile,readdir}from'node:fs/promises';import assert from'node:assert/strict';
+const db=new PGlite();try{
+await db.exec(`create role anon;create role authenticated;create role service_role;create schema auth;create table auth.users(id uuid primary key,email text,email_confirmed_at timestamptz);create function auth.uid()returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;grant usage on schema auth to authenticated,anon,service_role;`);
+for(const name of(await readdir('supabase/migrations')).filter(n=>n.endsWith('.sql')).sort())await db.exec((await readFile('supabase/migrations/'+name,'utf8')).replace('create extension if not exists pgcrypto;',''));
+const c='66000000-0000-4000-8000-000000000011',u='66000000-0000-4000-8000-000000000001';await db.exec(`insert into auth.users values('${u}','batch@example.invalid',now());insert into public.user_profiles(id)values('${u}');insert into public.companies(id,name)values('${c}','Incremental payroll');insert into public.user_company_roles(company_id,user_id,role)values('${c}','${u}','Super Admin');set role authenticated;select set_config('request.jwt.claim.sub','${u}',false);`);
+
+const e=(await db.query('select public.save_employee($1,$2::jsonb) id',[c,JSON.stringify({employeeCode:'ALOK-MAR',firstName:'Alok',lastName:'Kumar',email:'alok@example.invalid',joiningDate:'2026-03-22'})])).rows[0].id;
+const dates=Array.from({length:10},(_,i)=>'2026-03-'+(22+i));
+const rows=dates.map(date=>({employeeId:e,date,status:new Date(date+'T00:00:00Z').getUTCDay()===0?'Weekly Off':'Present'}));
+await db.query('select public.import_attendance($1,$2::jsonb,$3)',[c,JSON.stringify(rows),'Alok joining-date regression']);
+const validate=async()=>(await db.query("select public.validate_payroll($1,'2026-03-01') data",[c])).rows[0].data;
+let checks=await validate();assert.equal(checks.readyCount,0);assert.ok(checks.pendingReasons.some(i=>i.employeeId===e&&i.check==='No Salary Assigned'));assert.ok(!checks.pendingReasons.some(i=>i.check==='Attendance Missing'));
+const v=(await db.query('select version from public.employees where id=$1',[e])).rows[0].version;
+await db.query(`select public.save_employee_salary_components($1,$2,'2026-10-01','{"basic":3000000}','{}',$3,'Initial manual salary')`,[c,e,v]);
+checks=await validate();assert.equal(checks.readyCount,1);assert.equal(checks.pendingReasons.length,0);
+await assert.rejects(db.query("select public.payslip_module_generate($1,'2026-03-01',$2::uuid[],false)",[c,[e]]),error=>error.code==='23514');
+const first=(await db.query("select public.calculate_payroll($1,'2026-03-01') id",[c])).rows[0].id;
+const saved=(await db.query('select * from public.payroll_run_employees where employee_id=$1',[e])).rows[0];assert.equal(saved.net_minor,967742);assert.equal(saved.snapshot.attendance.payableDays,10);assert.equal(saved.snapshot.attendance.present,8);assert.equal(saved.snapshot.attendance.weeklyOff,2);assert.equal(saved.snapshot.attendance.payrollDays,10);assert.ok(saved.snapshot.salary);
+let version=(await db.query('select version from public.payroll_runs where id=$1',[first])).rows[0].version;
+await db.query("select public.transition_payroll_batch($1,$2,'approve',$3,'')",[c,first,version]);version=(await db.query('select version from public.payroll_runs where id=$1',[first])).rows[0].version;
+await db.query("select public.transition_payroll_batch($1,$2,'lock',$3,'')",[c,first,version]);
+
+const call=async(sql,args=[])=>(await db.query(sql,args)).rows[0];
+const payrollBefore=JSON.stringify((await db.query('select * from public.payroll_run_employees')).rows);
+const attendanceBefore=JSON.stringify((await db.query('select * from public.attendance_records order by date')).rows);
+let dash=(await call("select public.payslip_module_dashboard($1,'2026-03-01') data",[c])).data;
+assert.equal(dash.items[0].canGenerate,true);assert.equal(dash.items[0].status,'Not generated');assert.equal(dash.items[0].netMinor,967742);
+assert.equal((await call("select public.payslip_module_generate($1,'2026-03-01',$2::uuid[],false) n",[c,[e]])).n,1);
+const slip=(await call('select id,content from public.payslips where company_id=$1',[c]));assert.equal(slip.content.netMinor,967742);assert.equal(slip.content.employeeName,'Alok Kumar');
+assert.equal((await call("select public.payslip_module_generate($1,'2026-03-01',$2::uuid[],false) n",[c,[e]])).n,0);
+assert.equal((await call("select public.payslip_module_generate($1,'2026-03-01',$2::uuid[],true) n",[c,[e]])).n,1);
+assert.equal(Number((await call('select count(*) n from public.payslip_revisions')).n),1);
+await assert.rejects(db.query('select public.payslip_email_claim($1,$2,$3)',[c,slip.id,'77000000-0000-4000-8000-000000000001']),error=>error.code==='23514');
+assert.equal((await call('select public.payslip_module_publish($1,$2::uuid[]) n',[c,[slip.id]])).n,1);
+assert.equal((await call("select public.payslip_module_generate($1,'2026-03-01',$2::uuid[],true) n",[c,[e]])).n,0);
+const key='77000000-0000-4000-8000-000000000001';const claim=(await call('select public.payslip_email_claim($1,$2,$3) a',[c,slip.id,key])).a;assert.equal(claim.acquired,true);assert.equal(claim.recipient,'alok@example.invalid');
+assert.equal((await call('select public.payslip_email_claim($1,$2,$3) a',[c,slip.id,key])).a.acquired,false);
+await assert.rejects(db.query('select public.payslip_email_claim($1,$2,$3)',[c,slip.id,'77000000-0000-4000-8000-000000000002']),error=>error.code==='23514');
+await db.query("select public.payslip_email_complete($1,$2,'Failed',null,'EMAIL_RATE_LIMITED')",[c,claim.id]);
+const retry=(await call('select public.payslip_email_claim($1,$2,$3) a',[c,slip.id,'77000000-0000-4000-8000-000000000003'])).a;assert.equal(retry.acquired,true);
+await db.query("select public.payslip_email_complete($1,$2,'Sent','provider-fixture',null)",[c,retry.id]);
+await assert.rejects(db.query('select public.payslip_email_claim($1,$2,$3)',[c,slip.id,'77000000-0000-4000-8000-000000000004']),error=>error.code==='23514');
+dash=(await call("select public.payslip_module_dashboard($1,'2026-03-01') data",[c])).data;assert.equal(dash.items[0].emailStatus,'Sent');assert.equal(dash.items[0].emailsSent,true);
+assert.equal(JSON.stringify((await db.query('select * from public.payroll_run_employees')).rows),payrollBefore);assert.equal(JSON.stringify((await db.query('select * from public.attendance_records order by date')).rows),attendanceBefore);
+await db.exec('reset role');
+await assert.rejects(db.query(`update public.payslips set content=content||'{"netMinor":1}' where id=$1`,[slip.id]),error=>error.code==='23514');
+assert.equal((await call(`select public.payslip_source_valid('{"salary":null}',100,0,100) valid`)).valid,false);
+const own='77000000-0000-4000-8000-000000000011';await db.exec(`insert into auth.users values('${own}','own@example.invalid',now());insert into public.user_profiles(id)values('${own}');insert into public.user_company_roles(company_id,user_id,role)values('${c}','${own}','Employee');update public.employees set user_id='${own}'where id='${e}';set role authenticated;select set_config('request.jwt.claim.sub','${own}',false);`);
+assert.equal((await call("select public.payslip_module_dashboard($1,'2026-03-01') data",[c])).data.items.length,1);
+assert.equal((await call('select count(*) n from public.payslip_email_attempts')).n,0);
+await assert.rejects(db.query("select public.payslip_module_generate($1,'2026-03-01',$2::uuid[],false)",[c,[e]]),error=>error.code==='42501');
+await assert.rejects(db.query("select public.payslip_module_dashboard('77000000-0000-4000-8000-000000000099','2026-03-01')"),error=>error.code==='42501');
+console.log('PASS Payslips: locked snapshot-only generation, missing-source validation, individual and idempotent generation, archived regeneration, publication immutability, retry history, email duplicate prevention, employee/tenant access, unchanged payroll/attendance.');
+}catch(error){console.error(error);process.exitCode=1;}finally{await db.close();}
