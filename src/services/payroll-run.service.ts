@@ -10,7 +10,7 @@ export interface PayrollRunData {
  run:null|{id:string;batch_number?:number;month:string;status:'Draft'|'Calculated'|'Approved'|'Locked';version:number;calculated_at:string;approved_at:string|null;locked_at:string|null};
  attendanceFinalized:boolean;snapshots:PayrollSnapshot[];
 }
-export interface PayrollChecks {issues:{employeeId:string;check:string;severity:'Passed'|'Warning'|'Blocking Error';message:string}[];readyCount?:number;calculatedCount?:number;blockingErrors:number;totalChecked:number;passed:number;warnings:number}
+export interface PayrollChecks {pendingReasons?:import('@/types').PayrollValidationIssue[];issues:{employeeId:string;check:string;severity:'Passed'|'Warning'|'Blocking Error';message:string}[];readyCount?:number;calculatedCount?:number;blockingErrors:number;totalChecked:number;passed:number;warnings:number}
 export function getPayrollRun(month:string){return tenantApi<PayrollRunData>(`payroll?month=${monthKey(month)}-01`);}
 export function payrollAction<T=unknown>(month:string,action:'validate'|'calculate'|'approve'|'lock'|'unlock'|'reopen',expectedVersion?:number,reason='',runId?:string){
  return tenantApi<T>('payroll',{method:'POST',body:JSON.stringify({month:`${monthKey(month)}-01`,action,expectedVersion,reason,runId})});

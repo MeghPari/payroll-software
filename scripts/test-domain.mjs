@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import ts from 'typescript';
 const output = new URL('../.test-output/', import.meta.url);
 await mkdir(output, { recursive: true });
-for (const name of ['money','payroll','authentication-errors','csv','currency','dates','attendance-completeness','attendance-input','accounting-reports','documents','gst-books','bank-book','headcount-report','payment-instructions','request-bucket','invoice-aging','cash-flow','payroll-guidance']) {
+for (const name of ['money','payroll','authentication-errors','csv','currency','dates','attendance-completeness','attendance-input','accounting-reports','documents','gst-books','bank-book','headcount-report','payment-instructions','request-bucket','invoice-aging','cash-flow','payroll-guidance','attendance-range']) {
   const source = await readFile(new URL(`../src/domain/${name}.ts`, import.meta.url), 'utf8');
   const compiled = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.ESNext } }).outputText.replace("'./money'", "'./money.mjs'").replace("'./accounting-reports'","'./accounting-reports.mjs'").replace("'./csv'","'./csv.mjs'");
   await writeFile(new URL(`${name}.mjs`, output), compiled);
@@ -14,6 +14,13 @@ const { authenticationFailure } = await import(new URL('authentication-errors.mj
 const { parseCSV,escapeCSV } = await import(new URL('csv.mjs',output).href);
 const { toMinor } = await import(new URL('currency.mjs',output).href);
 const { monthKey } = await import(new URL('dates.mjs',output).href);
+const {calendarAttendanceRange}=await import(new URL('attendance-range.mjs',output).href);
+const rangeDates=Array.from({length:10},(_,i)=>`2026-03-${22+i}`),rangeRecord={employeeId:'alok',status:'Present',checkIn:'09:00',checkOut:'18:00',workHours:8,overtime:1,leaveType:''};
+const rangeCalendar={holidays:[],schedules:[]},rangeRows=calendarAttendanceRange(rangeRecord,rangeDates,rangeCalendar,true);
+assert.equal(rangeRows.filter(r=>r.status==='Present').length,8);assert.equal(rangeRows.filter(r=>r.status==='Weekly Off').length,2);assert.equal(rangeRows[0].workHours,0);assert.equal(rangeRows[0].checkIn,'');assert.equal(calendarAttendanceRange(rangeRecord,rangeDates,rangeCalendar,false).filter(r=>r.status==='Present').length,10);
+const sevenDays={...rangeCalendar,schedules:[{active:true,employee_id:'alok',effective_from:'2026-03-01',effective_to:null,working_days:[0,1,2,3,4,5,6]}]};assert.equal(calendarAttendanceRange(rangeRecord,rangeDates,sevenDays,true).filter(r=>r.status==='Present').length,10);
+assert.equal(calendarAttendanceRange(rangeRecord,['2026-03-23'],{...sevenDays,holidays:[{date:'2026-03-23',active:true,review_reference:'Reviewed'}]},true)[0].status,'Holiday');
+console.log('PASS multi-date attendance: paid Sundays, cleared punch/hours, actual Sunday work override and reviewed calendar precedence.');
 let passed = 0;
 function test(name, callback) { callback(); passed++; console.log(`PASS ${name}`); }
 test('authentication network failure is not reported as bad credentials', () => {

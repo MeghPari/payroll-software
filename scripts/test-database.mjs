@@ -23,7 +23,7 @@ try {
   const directory = new URL('../supabase/migrations/', import.meta.url);
   // Historical tests below cover 001-048; current dataset behavior is tested
   // separately by test-employee-dataset.mjs on both supported upgrade paths.
-  for (const name of (await readdir(directory)).filter(name => name.endsWith('.sql')&&!name.includes('employee_dataset_salaries')&&!name.includes('clear_month_attendance')&&!name.includes('reset_attendance_payroll_month')&&!name.includes('manual_salary_optional_imports_kyc')&&!name.includes('incremental_employee_payroll')&&!name.includes('payroll_batch_editing')).sort()) {
+  for (const name of (await readdir(directory)).filter(name => name.endsWith('.sql')&&!name.includes('employee_dataset_salaries')&&!name.includes('clear_month_attendance')&&!name.includes('reset_attendance_payroll_month')&&!name.includes('manual_salary_optional_imports_kyc')&&!name.includes('incremental_employee_payroll')&&!name.includes('payroll_batch_editing')&&!name.includes('payroll_readiness_reasons')).sort()) {
     let source = await readFile(new URL(name, directory), 'utf8');
     // PGlite lacks pgcrypto. PostgreSQL's built-in gen_random_uuid is available;
     // no cryptographic pgcrypto functions are used by these migrations.

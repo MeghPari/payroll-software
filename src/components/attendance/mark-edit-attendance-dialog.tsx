@@ -13,6 +13,8 @@ import type { AttendanceStatus, DailyAttendanceRecord, Employee } from "@/types"
 import { toast } from "sonner";
 import { History } from "lucide-react";
 import { companyToday } from '@/domain/dates';
+import { tenantApi } from '@/lib/tenant-api';
+import { calendarAttendanceRange,type AttendanceCalendar } from '@/domain/attendance-range';
 
 interface MarkEditAttendanceDialogProps {
   open: boolean;
@@ -38,6 +40,7 @@ export function MarkEditAttendanceDialog({ open, onOpenChange, employees, date, 
   const [submitting, setSubmitting] = useState(false);
   const [fromDate, setFromDate] = useState(date);
   const [toDate, setToDate] = useState(date);
+  const [applyCalendar,setApplyCalendar]=useState(true);
 
   useEffect(() => {
     if (!open) return;
@@ -54,6 +57,7 @@ export function MarkEditAttendanceDialog({ open, onOpenChange, employees, date, 
     setReason("");
     setFromDate(date);
     setToDate(date);
+    setApplyCalendar(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, existingRecord, fixedEmployeeId, date]);
 
@@ -104,7 +108,11 @@ export function MarkEditAttendanceDialog({ open, onOpenChange, employees, date, 
         source: existingRecord?.source ?? "Manual",
       };
       if (existingRecord) await updateAttendance(record, reason);
-      else await createAttendance(entryDates.map(entryDate=>({...record,date:entryDate})));
+      else {
+        const useCalendar=allowDateRange&&applyCalendar;
+        const calendar=useCalendar?await tenantApi<AttendanceCalendar>('attendance/calendar'):{holidays:[],schedules:[]};
+        await createAttendance(calendarAttendanceRange(record,entryDates,calendar,useCalendar));
+      }
       toast.success(`Attendance ${existingRecord ? "updated" : "marked"} for ${employee.fullName}`);
       onDone();
       onOpenChange(false);
@@ -129,7 +137,8 @@ export function MarkEditAttendanceDialog({ open, onOpenChange, employees, date, 
               <div><Label htmlFor="attendanceFrom">From Date</Label><Input id="attendanceFrom" type="date" value={fromDate} min={employee?.joiningDate} max={companyToday()} onChange={event=>{setFromDate(event.target.value);if(event.target.value>toDate)setToDate(event.target.value);}} /></div>
               <div><Label htmlFor="attendanceTo">To Date</Label><Input id="attendanceTo" type="date" value={toDate} min={fromDate} max={companyToday()} onChange={event=>setToDate(event.target.value)} /></div>
             </div>
-            <p className="text-xs text-muted-foreground">The selected status applies to every date in this range. Record weekly offs and holidays separately. Existing entries will not be overwritten.</p>
+            <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={applyCalendar} onChange={event=>setApplyCalendar(event.target.checked)} className="mt-1"/>Apply paid weekly offs and reviewed holidays</label>
+            <p className="text-xs text-muted-foreground">Uses the employee or company work schedule; Sundays are weekly offs when no schedule exists. Weekly offs remain payable. Uncheck to record actual work on these dates. Existing entries will not be overwritten.</p>
           </div>}
           <div className="space-y-1.5">
             <Label htmlFor="attendance-employee">Employee</Label>

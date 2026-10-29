@@ -6,7 +6,7 @@ export function PayrollBlockers({issues,employees,onReviewOvertime}:{issues:Payr
  const blockers=issues.filter(issue=>issue.severity==='Blocking Error');
  if(!blockers.length)return null;
  const employeeMap=new Map(employees.map(employee=>[employee.id,employee]));
- return <section aria-label="Payroll issues to resolve" role="alert" className="mb-5 rounded-xl border border-red-200 bg-red-50 p-5"><h2 className="text-lg font-semibold">{blockers.length} issue(s) need attention before calculation</h2><p className="mt-1 text-sm text-muted-foreground">Attendance finalization is one step. Review the employee and payroll setup items below, then calculate again.</p><ul className="mt-4 divide-y divide-red-200">{blockers.map((issue,index)=>{
+ return <section aria-label="Payroll issues to resolve" role="alert" className="mb-5 rounded-xl border border-red-200 bg-red-50 p-5"><h2 className="text-lg font-semibold">{blockers.length} issue(s) need attention before calculation</h2><p className="mt-1 text-sm text-muted-foreground">Resolve these items for the pending employees below. Other ready employees can still be calculated; whole-month attendance finalization is optional.</p><ul className="mt-4 divide-y divide-red-200">{blockers.map((issue,index)=>{
   const employee=employeeMap.get(issue.employeeId);
   const attendance=['Attendance Finalization','Attendance Missing','Working Day Calendar','Working Day Attendance'].includes(issue.check);
   const settings=['Reviewed Rule Required','Payroll Configuration'].includes(issue.check);

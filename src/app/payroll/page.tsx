@@ -136,7 +136,7 @@ function PayrollRunPagePeriodContent({month,onMonthChange}:{month:string;onMonth
       const counts={}as Record<PayrollExceptionType,number>;
       for(const issue of checks.issues.filter(issue=>issue.severity!=='Passed'))counts[issue.check as PayrollExceptionType]=(counts[issue.check as PayrollExceptionType]??0)+1;
       setExceptions(counts);
-      if(checks.readyCount===0){toast.info('No new employees are ready. Complete attendance and salary setup for pending employees.');return;}
+      if(checks.readyCount===0){const issue=checks.pendingReasons?.[0];const employee=employees.find(row=>row.id===issue?.employeeId);toast.info(issue?`${employee?.fullName??'Pending employee'}: ${issue.message}`:'No new employees are ready. Run Validation to review pending attendance and salary setup.');return;}
       if(checks.blockingErrors){const first=checks.issues.find(issue=>issue.severity==='Blocking Error');toast.error(first?.message??'Review the payroll issues shown below.');return;}
       await payrollAction(monthKey,'calculate');await refresh(false);toast.success('Ready employees calculated. Previously calculated salaries and payments are retained.');
     }
@@ -275,7 +275,7 @@ function PayrollRunPagePeriodContent({month,onMonthChange}:{month:string;onMonth
       <PayrollSetupNotice warnings={rows.flatMap(row=>row.setupWarnings??[])} showEmployeeLinks/>
       {rows.some(row=>row.salary.structure==='Salary source unavailable')&&<p role="status" className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm">Some saved salaries have missing source details. Their captured totals are shown below. Review these employees before approval; Edit / recalculate this batch can rebuild unpublished calculations from reviewed inputs.</p>}
       {rows.length>0&&<PayrollComparison month={monthKey} rows={rows} employees={employees}/>}
-      {validation&&<PayrollBlockers issues={validation.issues} employees={employees} onReviewOvertime={()=>{setShowAdjustments(true);requestAnimationFrame(()=>document.getElementById('payroll-adjustments')?.scrollIntoView({behavior:'smooth'}));}}/>}
+      {validation&&<PayrollBlockers issues={[...validation.issues,...(validation.pendingReasons??[])]} employees={employees} onReviewOvertime={()=>{setShowAdjustments(true);requestAnimationFrame(()=>document.getElementById('payroll-adjustments')?.scrollIntoView({behavior:'smooth'}));}}/>}
       <section className="mb-5 rounded-xl border border-blue-200 bg-blue-50 p-5"><h2 className="font-semibold">Calculate employees with complete monthly attendance</h2><p className="mt-2 text-sm">Employees with incomplete attendance remain pending. Run again when more employees are ready; earlier salaries and payments are retained. Approve and lock each batch before payment.</p><div className="mt-3 flex flex-wrap gap-2"><Button disabled={loading||!!busy||!permitted('payroll.run')} onClick={handleCalculate}>{busy==='calculate'?'Calculating...':'Calculate ready employees'}</Button><Link className="self-center text-sm font-semibold text-primary" href="/attendance">Review pending attendance</Link>{isLocked&&<Link className="self-center text-sm font-semibold text-primary" href="/disbursement">Salary payments</Link>}</div></section>
       <SectionCard className="mb-5">
         {loading ? <div className="h-24 animate-pulse rounded-lg bg-muted" /> : <PayrollStepper steps={buildSteps(period)} />}
