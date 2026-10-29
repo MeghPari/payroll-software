@@ -24,7 +24,6 @@ import type { Employee, EmployeeKYC, SalaryHold, SalaryProfile } from "@/types";
 import { DocumentsPanel } from "./documents-panel";
 import { AccountLinkEditor } from "@/components/employees/account-link-editor";
 import { ManagerEditor } from "@/components/employees/manager-editor";
-import { PersonalEditor } from "@/components/employees/personal-editor";
 import { OverviewPanel } from "./overview-panel";
 import { EmploymentPanel } from "./employment-panel";
 import { SalaryPanel } from "./salary-panel";
@@ -147,7 +146,7 @@ function EmployeeProfileContent() {
         </TabsList>
 
         <TabsContent value="overview" className="mt-4">
-          {employee && <><OverviewPanel employee={employee} /><div className="mt-4"><PersonalEditor key={employee.version} employee={employee} onSaved={load}/></div></>}
+          {employee && <OverviewPanel employee={employee} onSaved={load}/>}
         </TabsContent>
         <TabsContent value="employment" className="mt-4">
           {employee && <><EmploymentPanel employee={employee} onChanged={load}/><ManagerEditor key={employee.version} employee={employee} onSaved={load}/><AccountLinkEditor key={"account-"+employee.version} employee={employee} onSaved={load}/></>}
